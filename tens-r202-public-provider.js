@@ -1,5 +1,3 @@
-[Reading 26 lines from start (total: 26 lines, 0 remaining)]
-
 (() => {
 'use strict';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -26,5 +24,3 @@ const provider=Object.freeze({version:'3.0.0-r202-live',scopeLabel:'Live R202 pu
 }});
 window.TENS_PUBLIC_PROVIDER=provider;
 })();
-
-[executed on device: lifestyle (c844dcf9-13d5-4dc5-b408-fe14e91c4186)]
