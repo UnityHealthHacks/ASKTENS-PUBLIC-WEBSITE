@@ -1,16 +1,281 @@
 (() => {
-'use strict';
-const VERSION='0.3.0',STABLE_ID=/^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
-const UNKNOWN_REASONS=new Set(['NOT_ESTABLISHED','NO_INDEX_MATCH','SOURCE_UNAVAILABLE','PROVENANCE_UNRESOLVED','CONFLICTING_EVIDENCE','SCOPE_LIMITATION']);
-const RESULT_STATES=new Set(['COMPLETE','COMPLETE_WITH_LIMITATIONS','NO_INDEX_MATCH','FAILED','CANCELLED','TEST_ONLY']);
-const FINANCIAL_KINDS=new Set(['APPROPRIATION','BUDGET_AMENDMENT','GRANT_CEILING','GRANT_AWARD','CONTRACT_AUTHORIZATION','PURCHASE_ORDER_AUTHORIZATION','ESTIMATE','INVOICE','APPLICATION_FOR_PAYMENT','PAYMENT','REIMBURSEMENT_REQUEST','REIMBURSEMENT','REFUND','CREDIT','MATCH_REQUIREMENT','OTHER']);
-const isObject=v=>Boolean(v)&&typeof v==='object'&&!Array.isArray(v),isText=v=>typeof v==='string'&&v.trim().length>0,isStableId=v=>isText(v)&&v.length>=3&&STABLE_ID.test(v),isTextArray=v=>Array.isArray(v)&&v.every(isText);
-function isSafePublicUrl(v){if(!isText(v))return false;try{const u=new URL(v,window.location.href);return u.protocol==='https:'||u.protocol==='http:'}catch{return false}}
-function validateAudit(a,e,o){if(!isObject(a)){e.push('Missing search audit summary.');return}if(!isStableId(a.searchEventId))e.push('Audit field searchEventId is missing or invalid.');if(!isStableId(a.indexVersion))e.push('Audit field indexVersion is missing or invalid.');if(!isText(a.adapterVersion))e.push('Audit field adapterVersion is required.');if(!isText(a.rulesetVersion))e.push('Audit field rulesetVersion is required.');if(!['PRODUCTION','TEST'].includes(a.environment))e.push('Audit field environment is missing or invalid.');if(!RESULT_STATES.has(a.resultState))e.push('Audit resultState is missing or invalid.');if(a.environment==='PRODUCTION'&&a.resultState==='TEST_ONLY')e.push('PRODUCTION evidence result cannot use TEST_ONLY state.');if(a.environment==='TEST'){if(!['TEST_ONLY','FAILED','CANCELLED'].includes(a.resultState))e.push('TEST evidence result cannot claim a production completion state.');if(o.allowTestOnly!==true)e.push('TEST evidence result is blocked from production validation mode.')}}
-function validateSources(s,e){if(!Array.isArray(s)){e.push('sources must be an array.');return new Map()}const m=new Map();for(const x of s){if(!isObject(x)){e.push('Source entry is malformed.');continue}const id=isText(x.id)?x.id:'(unknown source)';if(!isStableId(x.id))e.push(`Source ${id} has a missing or invalid id.`);if(!isStableId(x.occurrenceId))e.push(`Source ${id} is missing a valid occurrenceId.`);if(!isText(x.label))e.push(`Source ${id} is missing label.`);if(!isText(x.recordType))e.push(`Source ${id} is missing recordType.`);if(x.provenanceStatus!=='verified')e.push(`Source ${id} has unresolved provenance.`);if(x.publicSafe!==true)e.push(`Source ${id} is not explicitly public-safe.`);if(Object.prototype.hasOwnProperty.call(x,'url')&&x.url!==''&&!isSafePublicUrl(x.url))e.push(`Source ${id} has an unsafe or invalid public URL.`);if(isStableId(x.id)){if(m.has(x.id))e.push(`Duplicate public source id ${x.id}.`);else m.set(x.id,x)}}return m}
-function validateFinancialFields(f,id,e){const a=Object.prototype.hasOwnProperty.call(f,'amount'),k=Object.prototype.hasOwnProperty.call(f,'financialKind'),c=Object.prototype.hasOwnProperty.call(f,'currency');if(k&&!FINANCIAL_KINDS.has(f.financialKind))e.push(`${id} has an invalid financialKind.`);if(a&&(typeof f.amount!=='number'||!Number.isFinite(f.amount)))e.push(`${id} amount must be a finite number.`);if(a&&!k)e.push(`${id} contains an amount without a financialKind.`);if(a&&(!c||!/^[A-Z]{3}$/.test(f.currency)))e.push(`${id} contains an amount without a valid three-letter currency code.`);if(c&&!/^[A-Z]{3}$/.test(f.currency))e.push(`${id} has an invalid currency code.`)}
-function validateFinding(f,c,m,ids,e){if(!isObject(f)){e.push(`${c} finding is malformed.`);return}const id=isText(f.id)?f.id:'(unknown finding)';if(!isStableId(f.id))e.push(`${c} finding has a missing or invalid id.`);if(isStableId(f.id)){if(ids.has(f.id))e.push(`Duplicate finding id ${f.id}.`);else ids.add(f.id)}if(!isText(f.title))e.push(`${id} is missing title.`);if(!isText(f.text))e.push(`${id} is missing text.`);if(f.classification!==c)e.push(`${id} classification does not match ${c} result section.`);if(!Array.isArray(f.sourceIds))e.push(`${id} sourceIds must be an array.`);if(!isTextArray(f.limitations))e.push(`${id} limitations must contain only non-empty text values.`);if(f.provenanceStatus!=='verified'&&f.provenanceStatus!=='unresolved')e.push(`${id} has a missing or invalid provenanceStatus.`);const ss=Array.isArray(f.sourceIds)?f.sourceIds:[],u=new Set();for(const s of ss){if(!isStableId(s)){e.push(`${id} contains an invalid source id.`);continue}if(u.has(s))e.push(`${id} contains duplicate source id ${s}.`);u.add(s);if(!m.has(s))e.push(`${id} references source ${s} that was not returned as an approved public source.`)}if(c==='VERIFIED'){if(f.provenanceStatus!=='verified')e.push(`${id} cannot be VERIFIED with unresolved provenance.`);if(ss.length<1)e.push(`${id} cannot be VERIFIED without at least one source.`)}if(c==='INFERENCE'){if(ss.length<1)e.push(`${id} cannot be INFERENCE without supporting source evidence.`);if(!isText(f.reasoning))e.push(`${id} cannot be INFERENCE without explicit reasoning.`)}if(c==='UNKNOWN'&&!UNKNOWN_REASONS.has(f.unknownReason))e.push(`${id} UNKNOWN finding is missing a valid unknownReason.`);validateFinancialFields(f,id,e)}
-function validateResult(r,o={}){const e=[];if(!isObject(r))return{valid:false,errors:['Adapter returned a non-object result.']};for(const k of ['verified','inference','unknown','sources','limitations','actions'])if(!Array.isArray(r[k]))e.push(`${k} must be an array.`);validateAudit(r.audit,e,o);const m=validateSources(r.sources,e),ids=new Set();for(const f of Array.isArray(r.verified)?r.verified:[])validateFinding(f,'VERIFIED',m,ids,e);for(const f of Array.isArray(r.inference)?r.inference:[])validateFinding(f,'INFERENCE',m,ids,e);for(const f of Array.isArray(r.unknown)?r.unknown:[])validateFinding(f,'UNKNOWN',m,ids,e);if(Array.isArray(r.limitations)&&!isTextArray(r.limitations))e.push('limitations contains an invalid value.');if(Array.isArray(r.actions)&&!isTextArray(r.actions))e.push('actions contains an invalid value.');const s=r.audit&&r.audit.resultState,v=Array.isArray(r.verified)?r.verified.length:0,i=Array.isArray(r.inference)?r.inference.length:0,u=Array.isArray(r.unknown)?r.unknown:[];if(s==='NO_INDEX_MATCH'){if(v||i)e.push('NO_INDEX_MATCH cannot contain VERIFIED or INFERENCE findings.');if(!u.some(x=>x&&x.unknownReason==='NO_INDEX_MATCH'))e.push('NO_INDEX_MATCH resultState requires an UNKNOWN finding with unknownReason NO_INDEX_MATCH.')}if((s==='FAILED'||s==='CANCELLED')&&(v||i))e.push(`${s} search results cannot present VERIFIED or INFERENCE findings as completed conclusions.`);if(s==='COMPLETE_WITH_LIMITATIONS'&&(!Array.isArray(r.limitations)||r.limitations.length<1))e.push('COMPLETE_WITH_LIMITATIONS requires at least one explicit limitation.');return{valid:e.length===0,errors:e}}
-function rejectedResult(e){return{verified:[],inference:[],unknown:[{id:'SYSTEM_RESULT_REJECTED',title:'Evidence result rejected by TENS validation',text:'The connected evidence result did not satisfy TENS provenance, classification, public-safe, structural, audit, or environment requirements. TENS is not presenting the rejected material as fact.',classification:'UNKNOWN',unknownReason:'PROVENANCE_UNRESOLVED',sourceIds:[],limitations:e.slice(0,8),provenanceStatus:'unresolved'}],sources:[],limitations:['The live result failed TENS evidence validation.'].concat(e.slice(0,8)),actions:['Review the adapter output and evidence provenance before retrying.'],audit:{searchEventId:'SYSTEM_REJECTED_RESULT',indexVersion:'UNVERIFIED',adapterVersion:'UNVERIFIED',rulesetVersion:`TENS_GUARD_${VERSION}`,environment:'PRODUCTION',resultState:'FAILED'}}}
-window.TENS_EVIDENCE_GUARD=Object.freeze({version:VERSION,validateResult,rejectedResult});
+  'use strict';
+
+  const VERSION = '0.3.0';
+  const STABLE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
+
+  const UNKNOWN_REASONS = new Set([
+    'NOT_ESTABLISHED',
+    'NO_INDEX_MATCH',
+    'SOURCE_UNAVAILABLE',
+    'PROVENANCE_UNRESOLVED',
+    'CONFLICTING_EVIDENCE',
+    'SCOPE_LIMITATION'
+  ]);
+
+  const RESULT_STATES = new Set([
+    'COMPLETE',
+    'COMPLETE_WITH_LIMITATIONS',
+    'NO_INDEX_MATCH',
+    'FAILED',
+    'CANCELLED',
+    'TEST_ONLY'
+  ]);
+
+  const FINANCIAL_KINDS = new Set([
+    'APPROPRIATION',
+    'BUDGET_AMENDMENT',
+    'GRANT_CEILING',
+    'GRANT_AWARD',
+    'CONTRACT_AUTHORIZATION',
+    'PURCHASE_ORDER_AUTHORIZATION',
+    'ESTIMATE',
+    'INVOICE',
+    'APPLICATION_FOR_PAYMENT',
+    'PAYMENT',
+    'REIMBURSEMENT_REQUEST',
+    'REIMBURSEMENT',
+    'REFUND',
+    'CREDIT',
+    'MATCH_REQUIREMENT',
+    'OTHER'
+  ]);
+
+  const isObject = value => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+  const isText = value => typeof value === 'string' && value.trim().length > 0;
+  const isStableId = value => isText(value) && value.length >= 3 && STABLE_ID.test(value);
+  const isTextArray = value => Array.isArray(value) && value.every(isText);
+
+  function isSafePublicUrl(value) {
+    if (!isText(value)) return false;
+    try {
+      const url = new URL(value, window.location.href);
+      return url.protocol === 'https:' || url.protocol === 'http:';
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function validateAudit(audit, errors, options) {
+    if (!isObject(audit)) {
+      errors.push('Missing search audit summary.');
+      return;
+    }
+
+    if (!isStableId(audit.searchEventId)) errors.push('Audit field searchEventId is missing or invalid.');
+    if (!isStableId(audit.indexVersion)) errors.push('Audit field indexVersion is missing or invalid.');
+    if (!isText(audit.adapterVersion)) errors.push('Audit field adapterVersion is required.');
+    if (!isText(audit.rulesetVersion)) errors.push('Audit field rulesetVersion is required.');
+    if (!['PRODUCTION', 'TEST'].includes(audit.environment)) errors.push('Audit field environment is missing or invalid.');
+
+    if (!RESULT_STATES.has(audit.resultState)) {
+      errors.push('Audit resultState is missing or invalid.');
+    }
+
+    if (audit.environment === 'PRODUCTION' && audit.resultState === 'TEST_ONLY') {
+      errors.push('PRODUCTION evidence result cannot use TEST_ONLY state.');
+    }
+
+    if (audit.environment === 'TEST') {
+      if (!['TEST_ONLY', 'FAILED', 'CANCELLED'].includes(audit.resultState)) {
+        errors.push('TEST evidence result cannot claim a production completion state.');
+      }
+      if (options.allowTestOnly !== true) {
+        errors.push('TEST evidence result is blocked from production validation mode.');
+      }
+    }
+  }
+
+  function validateSources(sources, errors) {
+    if (!Array.isArray(sources)) {
+      errors.push('sources must be an array.');
+      return new Map();
+    }
+
+    const map = new Map();
+    for (const source of sources) {
+      if (!isObject(source)) {
+        errors.push('Source entry is malformed.');
+        continue;
+      }
+
+      const id = isText(source.id) ? source.id : '(unknown source)';
+      if (!isStableId(source.id)) errors.push(`Source ${id} has a missing or invalid id.`);
+      if (!isStableId(source.occurrenceId)) errors.push(`Source ${id} is missing a valid occurrenceId.`);
+      if (!isText(source.label)) errors.push(`Source ${id} is missing label.`);
+      if (!isText(source.recordType)) errors.push(`Source ${id} is missing recordType.`);
+      if (source.provenanceStatus !== 'verified') errors.push(`Source ${id} has unresolved provenance.`);
+      if (source.publicSafe !== true) errors.push(`Source ${id} is not explicitly public-safe.`);
+      if (Object.prototype.hasOwnProperty.call(source, 'url') && source.url !== '' && !isSafePublicUrl(source.url)) {
+        errors.push(`Source ${id} has an unsafe or invalid public URL.`);
+      }
+
+      if (isStableId(source.id)) {
+        if (map.has(source.id)) errors.push(`Duplicate public source id ${source.id}.`);
+        else map.set(source.id, source);
+      }
+    }
+    return map;
+  }
+
+  function validateFinancialFields(finding, id, errors) {
+    const hasAmount = Object.prototype.hasOwnProperty.call(finding, 'amount');
+    const hasFinancialKind = Object.prototype.hasOwnProperty.call(finding, 'financialKind');
+    const hasCurrency = Object.prototype.hasOwnProperty.call(finding, 'currency');
+
+    if (hasFinancialKind && !FINANCIAL_KINDS.has(finding.financialKind)) {
+      errors.push(`${id} has an invalid financialKind.`);
+    }
+    if (hasAmount && (typeof finding.amount !== 'number' || !Number.isFinite(finding.amount))) {
+      errors.push(`${id} amount must be a finite number.`);
+    }
+    if (hasAmount && !hasFinancialKind) {
+      errors.push(`${id} contains an amount without a financialKind.`);
+    }
+    if (hasAmount && (!hasCurrency || !/^[A-Z]{3}$/.test(finding.currency))) {
+      errors.push(`${id} contains an amount without a valid three-letter currency code.`);
+    }
+    if (hasCurrency && !/^[A-Z]{3}$/.test(finding.currency)) {
+      errors.push(`${id} has an invalid currency code.`);
+    }
+  }
+
+  function validateFinding(finding, expectedClass, sourceMap, findingIds, errors) {
+    if (!isObject(finding)) {
+      errors.push(`${expectedClass} finding is malformed.`);
+      return;
+    }
+
+    const id = isText(finding.id) ? finding.id : '(unknown finding)';
+    if (!isStableId(finding.id)) errors.push(`${expectedClass} finding has a missing or invalid id.`);
+    if (isStableId(finding.id)) {
+      if (findingIds.has(finding.id)) errors.push(`Duplicate finding id ${finding.id}.`);
+      else findingIds.add(finding.id);
+    }
+
+    if (!isText(finding.title)) errors.push(`${id} is missing title.`);
+    if (!isText(finding.text)) errors.push(`${id} is missing text.`);
+    if (finding.classification !== expectedClass) errors.push(`${id} classification does not match ${expectedClass} result section.`);
+    if (!Array.isArray(finding.sourceIds)) errors.push(`${id} sourceIds must be an array.`);
+    if (!isTextArray(finding.limitations)) errors.push(`${id} limitations must contain only non-empty text values.`);
+    if (finding.provenanceStatus !== 'verified' && finding.provenanceStatus !== 'unresolved') {
+      errors.push(`${id} has a missing or invalid provenanceStatus.`);
+    }
+
+    const sourceIds = Array.isArray(finding.sourceIds) ? finding.sourceIds : [];
+    const uniqueSourceIds = new Set();
+    for (const sourceId of sourceIds) {
+      if (!isStableId(sourceId)) {
+        errors.push(`${id} contains an invalid source id.`);
+        continue;
+      }
+      if (uniqueSourceIds.has(sourceId)) errors.push(`${id} contains duplicate source id ${sourceId}.`);
+      uniqueSourceIds.add(sourceId);
+      if (!sourceMap.has(sourceId)) errors.push(`${id} references source ${sourceId} that was not returned as an approved public source.`);
+    }
+
+    if (expectedClass === 'VERIFIED') {
+      if (finding.provenanceStatus !== 'verified') errors.push(`${id} cannot be VERIFIED with unresolved provenance.`);
+      if (sourceIds.length < 1) errors.push(`${id} cannot be VERIFIED without at least one source.`);
+    }
+
+    if (expectedClass === 'INFERENCE') {
+      if (sourceIds.length < 1) errors.push(`${id} cannot be INFERENCE without supporting source evidence.`);
+      if (!isText(finding.reasoning)) errors.push(`${id} cannot be INFERENCE without explicit reasoning.`);
+    }
+
+    if (expectedClass === 'UNKNOWN') {
+      if (!UNKNOWN_REASONS.has(finding.unknownReason)) errors.push(`${id} UNKNOWN finding is missing a valid unknownReason.`);
+    }
+
+    validateFinancialFields(finding, id, errors);
+  }
+
+  function validateResult(result, options = {}) {
+    const errors = [];
+    if (!isObject(result)) return { valid: false, errors: ['Adapter returned a non-object result.'] };
+
+    for (const key of ['verified', 'inference', 'unknown', 'sources', 'limitations', 'actions']) {
+      if (!Array.isArray(result[key])) errors.push(`${key} must be an array.`);
+    }
+
+    validateAudit(result.audit, errors, options);
+    const sourceMap = validateSources(result.sources, errors);
+    const findingIds = new Set();
+
+    for (const finding of Array.isArray(result.verified) ? result.verified : []) {
+      validateFinding(finding, 'VERIFIED', sourceMap, findingIds, errors);
+    }
+    for (const finding of Array.isArray(result.inference) ? result.inference : []) {
+      validateFinding(finding, 'INFERENCE', sourceMap, findingIds, errors);
+    }
+    for (const finding of Array.isArray(result.unknown) ? result.unknown : []) {
+      validateFinding(finding, 'UNKNOWN', sourceMap, findingIds, errors);
+    }
+
+    if (Array.isArray(result.limitations) && !isTextArray(result.limitations)) {
+      errors.push('limitations contains an invalid value.');
+    }
+    if (Array.isArray(result.actions) && !isTextArray(result.actions)) {
+      errors.push('actions contains an invalid value.');
+    }
+
+    const auditState = result.audit && result.audit.resultState;
+    const verifiedCount = Array.isArray(result.verified) ? result.verified.length : 0;
+    const inferenceCount = Array.isArray(result.inference) ? result.inference.length : 0;
+    const unknown = Array.isArray(result.unknown) ? result.unknown : [];
+
+    if (auditState === 'NO_INDEX_MATCH') {
+      if (verifiedCount || inferenceCount) {
+        errors.push('NO_INDEX_MATCH cannot contain VERIFIED or INFERENCE findings.');
+      }
+      if (!unknown.some(item => item && item.unknownReason === 'NO_INDEX_MATCH')) {
+        errors.push('NO_INDEX_MATCH resultState requires an UNKNOWN finding with unknownReason NO_INDEX_MATCH.');
+      }
+    }
+
+    if ((auditState === 'FAILED' || auditState === 'CANCELLED') && (verifiedCount || inferenceCount)) {
+      errors.push(`${auditState} search results cannot present VERIFIED or INFERENCE findings as completed conclusions.`);
+    }
+
+    if (auditState === 'COMPLETE_WITH_LIMITATIONS' && (!Array.isArray(result.limitations) || result.limitations.length < 1)) {
+      errors.push('COMPLETE_WITH_LIMITATIONS requires at least one explicit limitation.');
+    }
+
+    return { valid: errors.length === 0, errors };
+  }
+
+  function rejectedResult(validationErrors) {
+    return {
+      verified: [],
+      inference: [],
+      unknown: [{
+        id: 'SYSTEM_RESULT_REJECTED',
+        title: 'Evidence result rejected by TENS validation',
+        text: 'The connected evidence result did not satisfy TENS provenance, classification, public-safe, structural, audit, or environment requirements. TENS is not presenting the rejected material as fact.',
+        classification: 'UNKNOWN',
+        unknownReason: 'PROVENANCE_UNRESOLVED',
+        sourceIds: [],
+        limitations: validationErrors.slice(0, 8),
+        provenanceStatus: 'unresolved'
+      }],
+      sources: [],
+      limitations: ['The live result failed TENS evidence validation.'].concat(validationErrors.slice(0, 8)),
+      actions: ['Review the adapter output and evidence provenance before retrying.'],
+      audit: {
+        searchEventId: 'SYSTEM_REJECTED_RESULT',
+        indexVersion: 'UNVERIFIED',
+        adapterVersion: 'UNVERIFIED',
+        rulesetVersion: `TENS_GUARD_${VERSION}`,
+        environment: 'PRODUCTION',
+        resultState: 'FAILED'
+      }
+    };
+  }
+
+  window.TENS_EVIDENCE_GUARD = Object.freeze({
+    version: VERSION,
+    validateResult,
+    rejectedResult
+  });
 })();

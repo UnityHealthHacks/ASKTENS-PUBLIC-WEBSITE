@@ -12,6 +12,7 @@
       if (!cap.ok || info.ready !== true || info.mode !== 'DRY_RUN' || info.providerWrite !== false) return;
       window.TENS_PRR_STATUS = Object.freeze({get:getStatus});
       window.TENS_PRR_BRIDGE_INFO = Object.freeze(info);
+      // No release-authorized submitter exists in this candidate.
       window.dispatchEvent(new CustomEvent('tens-prr-bridge-ready',{detail:{mode:info.mode,submitEnabled:false}}));
     } catch (e) {}
   }

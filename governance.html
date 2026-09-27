@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#02060b">
+<meta name="description" content="Compare TENS AI Governance Watch and Advanced Managed AI Governance.">
+<title>AI Governance — TENS</title>
+<style>
+:root{color-scheme:dark;--bg:#02060b;--panel:#07131e;--text:#eef7ff;--muted:#91a9bb;--cyan:#82d2ff;--line:rgba(126,202,252,.24);--ok:#79d7a7;--hold:#ffd38a}*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(circle at 50% 0,rgba(38,106,154,.18),transparent 34rem),var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+header{padding:17px clamp(18px,5vw,64px);border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:18px}.brand{color:inherit;text-decoration:none;font-weight:800;letter-spacing:.25em}.nav{display:flex;gap:10px;flex-wrap:wrap}.nav a{color:#b7d7eb;text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:8px 11px;font-size:.75rem}
+main{width:min(1120px,calc(100% - 34px));margin:auto;padding:58px 0 80px}.eyebrow{color:var(--cyan);text-transform:uppercase;letter-spacing:.17em;font-size:.7rem;font-weight:800}h1{font-size:clamp(2.5rem,7vw,5rem);line-height:.98;letter-spacing:-.055em;margin:12px 0 20px;max-width:920px}p{color:var(--muted);line-height:1.7}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:34px}.card{border:1px solid var(--line);border-radius:20px;background:rgba(7,19,30,.82);padding:24px}.card h2{margin:5px 0 9px}.badge{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:6px 9px;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase}.verified{color:var(--ok)}.controlled{color:var(--hold)}
+.card h3{margin:20px 0 7px;color:#bde8ff;font-size:.86rem}.card ul{padding-left:20px;color:var(--muted);line-height:1.55}.boundary{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);color:#a7bac8;font-size:.8rem;line-height:1.55}
+.flow{margin-top:28px;border:1px solid var(--line);border-radius:18px;padding:24px;background:#06111b}.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:18px}.step{border:1px solid var(--line);border-radius:14px;padding:15px;color:#a9c4d5;font-size:.82rem}.step strong{display:block;color:#eaf8ff;margin-bottom:5px}
+.note{font-size:.78rem;color:#7f98aa;margin-top:24px}@media(max-width:820px){.grid,.steps{grid-template-columns:1fr}main{padding-top:42px}}
+</style>
+</head><body>
+<header><a class="brand" href="index.html">TENS</a><nav class="nav"><a href="pricing.html">Pricing</a><a href="business.html">For business</a><a href="browse.html">Evidence</a><a href="index.html">Ask TENS</a></nav></header>
+<main>
+<div class="eyebrow">AI governance & autonomous-agent oversight</div>
+<h1>Two levels of governed AI oversight.</h1>
+<p>TENS is designed to watch autonomous work without silently taking over authority. The two packages below use the same evidence-first governance principles, but they differ in scope, integration depth, and the amount of external AI infrastructure TENS is responsible for monitoring.</p>
+<section id="packages" class="grid"></section>
+<section class="flow">
+<div class="eyebrow">How advanced activation works</div>
+<h2>Production governance is earned per integration.</h2>
+<div class="steps">
+<div class="step"><strong>1 · Map</strong>Document the customer’s agents, systems, permissions and escalation rules.</div>
+<div class="step"><strong>2 · Connect read-only first</strong>Admit only the telemetry and records TENS needs to govern the environment.</div>
+<div class="step"><strong>3 · Adversarial acceptance</strong>Test permission drift, loops, stale workers, retry overflow, pressure and recovery.</div>
+<div class="step"><strong>4 · Activate</strong>Enable recurring governance only after the exact customer integration passes.</div>
+</div>
+<p class="note">The Level-1 external-company canary passed the current governance control set. That does not automatically authorize TENS to control a customer’s systems; each connection receives its own authority boundary and acceptance test.</p>
+</section>
+</main>
+<script src="tens-governance-packages.js"></script>
+<script src="tens-level1-rate-card.js"></script>
+<script>
+(()=>{const root=document.getElementById('packages'),xs=window.TENS_GOVERNANCE_PACKAGES?.packages||[],list=a=>'<ul>'+a.map(x=>'<li>'+x+'</li>').join('')+'</ul>';
+for(const p of xs){const el=document.createElement('article');el.className='card';const cls=p.availability==='VERIFIED_LEVEL1'?'verified':'controlled';const label=p.availability==='VERIFIED_LEVEL1'?'Verified Level 1':'Controlled onboarding',rate=(window.TENS_LEVEL1_RATE_CARD?.packages||[]).find(x=>x.id===p.id),price=rate?'$'+(rate.monthlyCents/100).toLocaleString('en-US')+'/month':'Pricing pending';el.innerHTML='<span class="badge '+cls+'">'+label+'</span><h2>'+p.name+'</h2><div style="font-size:1.55rem;font-weight:850;margin:8px 0">'+price+'</div><p>'+p.fit+'</p><h3>Included</h3>'+list(p.includes)+'<h3>What the organization provides</h3>'+list(p.requires)+'<div class="boundary"><strong>Boundary:</strong> '+p.boundary+'<br><br><strong>Billing:</strong> Candidate rate only. No charge is active until TENS Stripe setup and production onboarding are completed.</div>';root.appendChild(el)}})();
+</script>
+</body>
+</html>

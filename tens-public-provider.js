@@ -157,6 +157,19 @@
     };
   }
 
+
+  function buildPrrProposal(groups,eventId) {
+    const ids=new Set((groups.unknown||[]).map(item=>item.id));
+    if(!ids.has('U_BBP_REPLACEMENT_ORIGIN')&&!ids.has('U_BBP_REPLACEMENT_RATIONALE')) return null;
+    return {
+      requestId: 'PRR_'+eventId,
+      agency: 'Sarasota County Government',
+      agencyKey: 'SARASOTA_COUNTY',
+      evidenceGap: 'Records identifying the origin, first entry, source, date, and contemporaneous rationale for the Blackburn Point Road Movable Bridge Replacement project in the Surtax IV process.',
+      draft: 'Under Florida public-records law, I request copies of existing records sufficient to identify when and by whom the project identified as "Blackburn Point Road Movable Bridge Replacement" was first proposed, created, entered, or added to Sarasota County\'s Surtax IV project list or precursor project-development records, and the contemporaneous basis for that entry. This includes existing project submission forms, staff worksheets, scoring or ranking materials, internal memoranda, emails, meeting notes, agenda backup, project lists and revisions, and correspondence that identify the source, date, rationale, or decision path for the replacement project. Date range: January 1, 2020 through December 31, 2022. Please provide responsive records electronically in their native format when reasonably available. I am requesting existing records only; no new record, legal research, or explanatory narrative is requested.'
+    };
+  }
+
   const provider = Object.freeze({
     version: '2.5.0-initial-public', indexVersion: INDEX_VERSION, scopeLabel: 'Initial public-safe index — Blackburn Point Bridge beta',
     async search(query, options = {}) {
@@ -166,15 +179,21 @@
       if (!relevantToIndex(q)) return noIndexMatch(query);
       const groups = pickFindings(q);
       const matchedSources = sourceSubset(groups);
+      const eventId = searchEventId();
+      const prrProposal = buildPrrProposal(groups,eventId);
       emitStatus({ eventType: 'CLASSIFY', message: 'Matching source-backed findings and unresolved gaps…', searchEventId: null });
       return {
         scopeLabel: provider.scopeLabel, verified: groups.verified, inference: groups.inference, unknown: groups.unknown, sources: matchedSources,
         limitations: ['This is an initial, curated public-safe index for the Blackburn Point Bridge beta. It is not the full private TENS archive and is not an exhaustive search of every government repository.', 'The search returns only findings that have been admitted to this bounded public index; omitted records may exist outside the current index.', 'A negative search result is never proof that no responsive record exists.'],
         actions: ['Highest-value open target: the Blackburn-specific pre-public-input Surtax IV project-origin record, including the first entry, creator/source, date, and supporting rationale.', 'Secondary targets: the original May 2021 rehabilitation chart/payment trail and the underlying U.S. Coast Guard determination cited by current PD&E materials.'],
-        audit: { searchEventId: searchEventId(), indexVersion: INDEX_VERSION, adapterVersion: 'PENDING_ADAPTER_STAMP', rulesetVersion: RULESET_VERSION, environment: 'PRODUCTION', resultState: 'COMPLETE_WITH_LIMITATIONS' }
+        prrProposal,
+        audit: { searchEventId: eventId, indexVersion: INDEX_VERSION, adapterVersion: 'PENDING_ADAPTER_STAMP', rulesetVersion: RULESET_VERSION, environment: 'PRODUCTION', resultState: 'COMPLETE_WITH_LIMITATIONS' }
       };
     }
   });
 
   window.TENS_PUBLIC_PROVIDER = provider;
+  if (window.TENS_EVIDENCE_ADAPTER_FACTORY && typeof window.TENS_EVIDENCE_ADAPTER_FACTORY.activate === 'function') {
+    window.TENS_EVIDENCE_ADAPTER_FACTORY.activate({ provider, adapterVersion: 'TENS_PUBLIC_ADAPTER_2_5_0' });
+  }
 })();

@@ -54,6 +54,8 @@
           throw new Error('TENS evidence provider returned no search audit identity.');
         }
 
+        // The adapter may truthfully stamp its own software version. It does not create
+        // searchEventId, indexVersion, rulesetVersion, findings, sources, or evidence counts.
         const audit = Object.assign({}, providerResult.audit, { adapterVersion });
         return Object.assign({}, providerResult, { audit });
       }
@@ -70,6 +72,8 @@
     delete window.TENS_EVIDENCE_ADAPTER;
   }
 
+  // This factory is intentionally inert. Loading this file does not connect an evidence
+  // provider and does not make adapterReady() true inside the TENS portal.
   window.TENS_EVIDENCE_ADAPTER_FACTORY = Object.freeze({
     version: FACTORY_VERSION,
     create,
