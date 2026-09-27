@@ -17,7 +17,7 @@ main{width:min(1120px,calc(100% - 34px));margin:auto;padding:58px 0 80px}.eyebro
 .note{font-size:.78rem;color:#7f98aa;margin-top:24px}@media(max-width:820px){.grid,.steps{grid-template-columns:1fr}main{padding-top:42px}}
 </style>
 </head><body>
-<header><a class="brand" href="index.html">TENS</a><nav class="nav"><a href="pricing.html">Pricing</a><a href="business.html">For business</a><a href="browse.html">Evidence</a><a href="index.html">Ask TENS</a></nav></header>
+<header><a class="brand" href="index.html">TENS</a><nav class="nav"><a href="pricing.html">Request a quote</a><a href="business.html">For business</a><a href="browse.html">Evidence</a><a href="index.html">Ask TENS</a></nav></header>
 <main>
 <div class="eyebrow">AI governance & autonomous-agent oversight</div>
 <h1>Two levels of governed AI oversight.</h1>
@@ -36,10 +36,9 @@ main{width:min(1120px,calc(100% - 34px));margin:auto;padding:58px 0 80px}.eyebro
 </section>
 </main>
 <script src="tens-governance-packages.js"></script>
-<script src="tens-level1-rate-card.js"></script>
 <script>
 (()=>{const root=document.getElementById('packages'),xs=window.TENS_GOVERNANCE_PACKAGES?.packages||[],list=a=>'<ul>'+a.map(x=>'<li>'+x+'</li>').join('')+'</ul>';
-for(const p of xs){const el=document.createElement('article');el.className='card';const cls=p.availability==='VERIFIED_LEVEL1'?'verified':'controlled';const label=p.availability==='VERIFIED_LEVEL1'?'Verified Level 1':'Controlled onboarding',rate=(window.TENS_LEVEL1_RATE_CARD?.packages||[]).find(x=>x.id===p.id),price=rate?'$'+(rate.monthlyCents/100).toLocaleString('en-US')+'/month':'Pricing pending';el.innerHTML='<span class="badge '+cls+'">'+label+'</span><h2>'+p.name+'</h2><div style="font-size:1.55rem;font-weight:850;margin:8px 0">'+price+'</div><p>'+p.fit+'</p><h3>Included</h3>'+list(p.includes)+'<h3>What the organization provides</h3>'+list(p.requires)+'<div class="boundary"><strong>Boundary:</strong> '+p.boundary+'<br><br><strong>Billing:</strong> Beta rate only. No charge is active until TENS Stripe setup and production onboarding are completed.</div>';root.appendChild(el)}})();
+for(const p of xs){const el=document.createElement('article');el.className='card';const cls=p.availability==='VERIFIED_LEVEL1'?'verified':'controlled';const label=p.availability==='VERIFIED_LEVEL1'?'Verified Level 1':'Controlled onboarding';el.innerHTML='<span class="badge '+cls+'">'+label+'</span><h2>'+p.name+'</h2><div style="font-size:1rem;font-weight:800;margin:8px 0;color:#bde8ff">Monthly managed service · scoped quote</div><p>'+p.fit+'</p><h3>Included</h3>'+list(p.includes)+'<h3>What the organization provides</h3>'+list(p.requires)+'<div class="boundary"><strong>Boundary:</strong> '+p.boundary+'<br><br><strong>Quote:</strong> TENS sizes the monthly service from the actual governed environment — agents, systems, activity, integrations, monitoring frequency, reporting, recovery rules and responsibility. You receive the quote before activation.</div><p><a href="pricing.html" style="color:#bde8ff">Request a governance quote →</a></p>';root.appendChild(el)}})();
 </script>
 </body>
 </html>
