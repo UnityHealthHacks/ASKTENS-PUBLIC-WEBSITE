@@ -41,6 +41,7 @@
         const onStatus = typeof options.onStatus === 'function' ? options.onStatus : () => {};
 
         const providerResult = await provider.search(query, {
+          language: isText(options.language) ? options.language.trim().toLowerCase() : 'en',
           emitStatus: event => {
             const status = normalizeStatusEvent(event);
             if (status) onStatus(status.message, status);

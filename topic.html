@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#06101a">
+<meta name="description" content="Living TENS public evidence subject page.">
+<meta name="tens-api-base" content="https://api.asktens.com">
+<title>TENS Subject — Living Evidence</title>
+<style>
+:root{color-scheme:dark;--bg:#06101a;--panel:#0a1824;--panel2:#0d1d2a;--line:#203747;--text:#eef7ff;--muted:#91a8bb;--soft:#6d8799;--cyan:#84d3ff;--verified:#79d7a7;--unknown:#efbd72}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}body{overflow-x:hidden;background:radial-gradient(circle at 75% -8%,rgba(59,129,176,.18),transparent 40rem),linear-gradient(180deg,#06101a,#08131d 48%,#071019)}a{color:inherit}.wrap{width:min(1180px,calc(100% - 28px));margin:auto}
+header{position:sticky;top:0;z-index:20;border-bottom:1px solid rgba(150,200,236,.12);background:rgba(4,12,19,.92);backdrop-filter:blur(14px)}.top{min-height:66px;display:flex;align-items:center;justify-content:space-between;gap:14px;min-width:0}.brand{display:flex;align-items:center;gap:10px;text-decoration:none}.mark{width:30px;height:30px;border:1px solid rgba(132,209,255,.36);border-radius:50%;position:relative}.mark:after{content:"";position:absolute;width:7px;height:7px;background:#a8e2ff;border-radius:50%;left:50%;top:50%;transform:translate(-50%,-50%);box-shadow:0 0 13px #65c5ff}.brand strong{letter-spacing:.25em}.nav{display:flex;gap:8px;flex-wrap:wrap;min-width:0;justify-content:flex-end}.nav a{font-size:.7rem;color:#9fbfd2;text-decoration:none;padding:7px 9px;border:1px solid rgba(126,201,252,.15);border-radius:999px}
+.hero{padding:52px 0 26px}.eyebrow{margin:0 0 8px;color:var(--cyan);font-size:.66rem;font-weight:800;text-transform:uppercase;letter-spacing:.16em}.hero h1{margin:0;font-size:clamp(2.6rem,7vw,5.3rem);font-weight:470;letter-spacing:-.055em;line-height:.94}.hero p{max-width:860px;color:#9bb0bf;line-height:1.72;margin:18px 0 0}.statusline{display:flex;flex-wrap:wrap;gap:9px;margin-top:18px}.pill{padding:7px 10px;border:1px solid rgba(126,201,252,.2);border-radius:999px;color:#9fc7df;background:rgba(7,20,31,.74);font-size:.66rem}.pill.good{border-color:rgba(121,215,167,.25);color:#a9e8c5}
+.summary{margin:8px 0 24px;border:1px solid rgba(121,215,167,.24);border-left:4px solid var(--verified);border-radius:16px;background:linear-gradient(180deg,rgba(12,29,42,.98),rgba(8,22,33,.98));padding:24px}.summary h2,.card h2,.recordsBox h2,.unknownBox h2{margin:0 0 10px;font-size:.86rem;text-transform:uppercase;letter-spacing:.12em}.summary .answer{font-size:1.02rem;line-height:1.72;color:#dbeaf3}.highlights{margin:14px 0 0;padding-left:20px;color:#b7cad7;line-height:1.6;font-size:.9rem}.meta{margin-top:12px;color:#718b9d;font-size:.72rem;line-height:1.5}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;padding-bottom:24px}.card,.recordsBox,.unknownBox{border:1px solid var(--line);border-radius:15px;background:linear-gradient(180deg,rgba(12,27,40,.96),rgba(9,21,32,.96));padding:20px}.card .sub{color:#748d9f;font-size:.73rem;line-height:1.5;margin-bottom:8px}.laneAnswer{color:#d0e0ea;font-size:.87rem;line-height:1.58;margin:4px 0 8px}.item{padding:13px 0;border-top:1px solid rgba(141,180,209,.11)}.item:first-of-type{border-top:0}.item p{margin:0;color:#b4c7d5;line-height:1.58;font-size:.84rem}.loading{color:#7793a6;font-size:.84rem;line-height:1.55}.error{color:#e9bd7d;font-size:.82rem;line-height:1.55}.records{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.record{display:block;text-decoration:none;padding:12px;border:1px solid rgba(126,201,252,.14);border-radius:10px;background:#0a1925}.record strong{display:block;color:#d9edf9;font-size:.84rem;line-height:1.35;overflow-wrap:anywhere;word-break:break-word}.record span{display:block;color:#708a9d;font-size:.67rem;margin-top:5px;overflow-wrap:anywhere;word-break:break-word}.item p,.unknownItem,.highlights li,.meta,.pill{overflow-wrap:anywhere;word-break:break-word}.unknownList{display:grid;gap:8px}.unknownItem{padding:12px;border:1px solid rgba(239,189,114,.16);border-radius:10px;background:rgba(35,27,17,.23);color:#b9c8d2;font-size:.82rem;line-height:1.55}.research{margin:18px 0 24px;padding:18px;border:1px solid rgba(126,201,252,.16);border-radius:14px;background:#091824}.research h2{margin:0 0 10px;font-size:.82rem;text-transform:uppercase;letter-spacing:.12em}.askrow{display:grid;grid-template-columns:1fr auto;gap:8px}.askrow input{min-width:0;border:1px solid rgba(126,201,252,.2);background:#07131e;color:#eef7ff;border-radius:10px;padding:13px 14px;font-size:.92rem;outline:none}.askrow button{border:0;border-radius:10px;padding:0 18px;background:linear-gradient(135deg,#daf3ff,#78caff);color:#06101a;font-weight:800;cursor:pointer}.truth{margin:8px 0 44px;padding:16px 18px;border:1px solid rgba(239,189,114,.18);border-radius:13px;background:rgba(35,27,17,.25);color:#91a8bb;font-size:.76rem;line-height:1.6}.footer{padding:22px 0 38px;border-top:1px solid rgba(141,180,209,.1);color:#637d90;font-size:.68rem;line-height:1.55}
+.reveal{opacity:0;transform:translateY(22px);transition:opacity .55s ease,transform .55s ease}.reveal.on{opacity:1;transform:none}
+@media(max-width:820px){.grid,.records{grid-template-columns:1fr}.hero{padding-top:38px}.nav a:nth-child(3){display:none}.hero h1{overflow-wrap:anywhere}.summary .answer{font-size:1.05rem}.highlights,.item p,.laneAnswer{font-size:.95rem}}@media(max-width:520px){.wrap{width:min(100% - 18px,1180px)}.summary,.card,.recordsBox,.unknownBox{padding:16px}.hero h1{font-size:2.55rem}.askrow{grid-template-columns:1fr}.askrow button{height:46px}.nav{gap:6px}.nav a{display:inline-flex;align-items:center;min-height:44px;font-size:.82rem;padding:10px 12px}}
+</style>
+</head>
+<body>
+<header><div class="wrap"><div class="top"><a class="brand" href="index.html"><span class="mark" aria-hidden="true"></span><strong>TENS</strong></a><nav class="nav"><a href="browse.html">← Back</a><a href="index.html">Ask TENS</a><a href="business.html">For business</a></nav></div></div></header>
+<main class="wrap">
+<section class="hero reveal"><p class="eyebrow">Living popular-link evidence page · R210</p><h1 id="title">TENS subject</h1><p id="intro"></p><div class="statusline"><span class="pill good">R210 live evidence</span><span class="pill" id="updated">Loading current record…</span><span class="pill">Facts first · assumptions never</span></div></section>
+<section class="summary reveal"><h2>Where the record stands now</h2><div class="answer" id="summaryAnswer">TENS is checking the current admitted evidence…</div><ul class="highlights" id="highlights"></ul><div class="meta" id="summaryMeta"></div></section>
+<section class="grid" id="lanes"></section>
+<section class="recordsBox reveal"><h2>Evidence files & records</h2><div class="meta">These are the public-safe source records returned across the current subject summaries. Archived copies show their preserved SHA-256 trail.</div><div class="records" id="records"><div class="loading">Evidence files will appear as the summaries finish.</div></div></section>
+<section class="unknownBox reveal" style="margin-top:18px"><h2>What is still unresolved</h2><div class="unknownList" id="unknowns"><div class="loading">Open questions and evidence limits will appear here.</div></div></section>
+<section class="research reveal"><h2>Ask another question</h2><div class="meta" style="margin:0 0 10px">Ask TENS a deeper question about this subject or anything else.</div><form id="askForm" class="askrow"><input id="ask" placeholder="Ask TENS about this subject…" autocomplete="off"><button type="submit">Ask TENS →</button></form></section>
+<div class="truth reveal"><strong>TENS truth boundary:</strong> This page refreshes from the evidence currently admitted to the local R210 public-safe research path. A missing result is not proof that no record exists. Direct statements remain traceable to their supporting records, and unresolved points remain labeled unresolved.</div>
+</main>
+<div class="wrap footer">Facts first. Transparency always. Assumptions never.</div>
+<script src="tens-api-config.js"></script>
+<script>
+(()=>{
+const cfgs={
+'blackburn':{title:'Blackburn Point Bridge',intro:'A living view of the bridge project: background, current decisions, engineering and alternatives, money and contracts, preservation/navigation, source files, and open questions.',lanes:[
+['Background & current status','What does the current public record establish about the history, current status, and major decision points for Blackburn Point Bridge?'],
+['Engineering & alternatives','What does the record establish about Blackburn Point Bridge engineering, inspections, repairs, preservation alternatives, and replacement alternatives?'],
+['Money & contracts','What does the record establish about Blackburn Point Bridge funding, contracts, purchase orders, consultant work, repair costs, and replacement costs?'],
+['Preservation & navigation','What does the record establish about Blackburn Point Bridge historic preservation, Section 106, navigation, and Coast Guard issues?']]},
+'midnight':{title:'Midnight Pass',intro:'A living view of Midnight Pass: history, current inlet status, engineering and monitoring, public funding and contracts, water quality, regulatory work, records, and open questions.',lanes:[
+['Background & current status',"What does the current public record establish about Midnight Pass, its history, the natural reopening, and the inlet's current status?"],
+['Engineering & monitoring','What does the record establish about Midnight Pass engineering, surveys, monitoring, maintenance planning, and inlet management?'],
+['Funding, grants & contracts','What does the record establish about Midnight Pass public funding, grants, consultants, contracts, work assignments, and expenditures?'],
+['Water quality & regulation','What does the record establish about Midnight Pass, Little Sarasota Bay water quality, circulation, environmental studies, and regulatory coordination?']]},
+'little-sarasota-bay':{title:'Little Sarasota Bay',intro:'A living view of the bay: water quality, circulation, funded improvement work, monitoring, connections to Midnight Pass, source records, and unresolved questions.',lanes:[
+['Background & current status','What does the current public record establish about Little Sarasota Bay and its current water-quality improvement work?'],
+['Water quality & circulation','What does the record establish about Little Sarasota Bay water quality, circulation, monitoring, and measured conditions?'],
+['Projects, grants & contracts','What does the record establish about Little Sarasota Bay projects, grants, contracts, consultants, and public funding?'],
+['Midnight Pass connection','What does the record establish about the relationship between Midnight Pass and Little Sarasota Bay?']]},
+'south-jetty':{title:'South Jetty',intro:'A living evidence page for South Jetty: project origin, current decisions, public funding, contracts, agency records, source files, and open questions.',lanes:[
+['Background & current status','What does the current public record establish about South Jetty, its project history, and current status?'],
+['Project & decisions','What does the record establish about South Jetty project scope, decisions, approvals, and planned work?'],
+['Funding & contracts','What does the record establish about South Jetty funding, contracts, procurement, and expenditures?'],
+['Official source trail','What official City of Venice, USACE, County, or other agency records currently support the South Jetty record?']]},
+'phillippi-creek':{title:'Phillippi Creek',intro:'A living evidence page for Phillippi Creek: water quality, runoff and wastewater inputs, documented pollutants, downstream effects, records, and open research gaps.',lanes:[
+['Background & current status','What does the current public record establish about Phillippi Creek and its current environmental status?'],
+['Water quality','What does the record establish about Phillippi Creek nutrients, dissolved oxygen, algae, fish kills, and water-quality measurements?'],
+['Documented source inputs','What pollution or runoff sources are directly documented in the current Phillippi Creek evidence record?'],
+['Downstream effects','What does the record establish about downstream effects from Phillippi Creek on Sarasota Bay or nearby waters?']]},
+'water-tower':{title:'North Water Tower',intro:'A living evidence page for the North Water Tower project: project background, reimbursements, Brown & Caldwell records, the 47th Street discrepancy, source files, and unresolved accounting questions.',lanes:[
+['Background & current status','What does the current public record establish about the North Water Tower project and its status?'],
+['Finance & reimbursements','What does the record establish about North Water Tower reimbursements, payments, purchase orders, and funding?'],
+['Brown & Caldwell','What does the record establish about Brown & Caldwell work, invoices, pay applications, and purchase orders connected with North Water Tower?'],
+['47th Street discrepancy','What does the record establish about the relationship or discrepancy between North Water Tower reimbursement records and 47th Street project payment applications?']]},
+'47th-street':{title:'47th Street',intro:'A living evidence page for the 47th Street project records: payment applications, Brown & Caldwell, purchase orders, the North Water Tower cross-project discrepancy, files, and unresolved allocations.',lanes:[
+['Background & current status','What does the current public record establish about the 47th Street project and its documented work?'],
+['Payment applications','What does the record establish about 47th Street payment applications, checks, invoices, and purchase orders?'],
+['Brown & Caldwell','What does the record establish about Brown & Caldwell work and payments associated with 47th Street?'],
+['North Water Tower connection','What does the record establish about the relationship or discrepancy between 47th Street payment records and North Water Tower reimbursement records?']]}
+};
+const id=new URLSearchParams(location.search).get('id')||'blackburn',cfg=cfgs[id]||cfgs.blackburn;
+document.title=cfg.title+' — TENS Living Evidence';document.getElementById('title').textContent=cfg.title;document.getElementById('intro').textContent=cfg.intro;
+const lanesEl=document.getElementById('lanes'),recordsEl=document.getElementById('records'),unknownEl=document.getElementById('unknowns'),summary=document.getElementById('summaryAnswer'),highlights=document.getElementById('highlights'),meta=document.getElementById('summaryMeta'),updated=document.getElementById('updated');
+const sourceMap=new Map(),unknownMap=new Map();
+cfg.lanes.forEach(([name,q],i)=>{const el=document.createElement('article');el.className='card reveal';el.id='lane'+i;el.innerHTML='<h2>'+escapeHtml(name)+'</h2><div class="sub">'+escapeHtml(q)+'</div><div class="loading">TENS is checking the current R210 evidence…</div>';lanesEl.appendChild(el)});
+function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function reveal(el){requestAnimationFrame(()=>el.classList.add('on'))}
+[...document.querySelectorAll('.reveal')].forEach((el,i)=>setTimeout(()=>reveal(el),100+i*70));
+async function research(question){
+ const start=await window.TENS_API.fetch('/api/research',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question})});
+ if(start.status!==202)throw new Error('QUEUE_'+start.status);const j=await start.json();
+ for(let i=0;i<240;i++){await new Promise(r=>setTimeout(r,i<8?350:600));const r=await window.TENS_API.fetch('/api/research/status?jobId='+encodeURIComponent(j.jobId));const x=await r.json();if(x.state==='COMPLETE')return x.result;if(x.state==='FAILED')throw new Error(x.errorCode||'RESEARCH_FAILED')}
+ throw new Error('RESEARCH_TIMEOUT')
+}
+function collect(r){for(const s of r.sources||[])sourceMap.set(s.evidenceId,s);for(const u of r.unknowns||[])unknownMap.set((u.type||'UNKNOWN')+'|'+(u.statement||''),u)}
+function terms(s){return [...new Set(String(s||'').toLowerCase().match(/[a-z0-9-]{4,}/g)||[])].filter(x=>!['what','does','record','establish','about','current','public','with','from','this','that'].includes(x))}
+function laneMatches(r,q){
+ const qt=terms(q);
+ return (r.verified||[]).map((v,i)=>{const h=String((v.type||'')+' '+(v.statement||'')).toLowerCase();let score=0;for(const t of qt)if(h.includes(t))score+=t.length>=8?3:1;return{v,i,score}}).filter(x=>x.score>0).sort((a,b)=>b.score-a.score||a.i-b.i).slice(0,5).map(x=>x.v)
+}
+function laneHtml(r,q){
+ const matched=laneMatches(r,q);
+ const items=matched.map(v=>'<div class="item"><p>'+escapeHtml(v.statement||'Verified source statement')+'</p></div>').join('');
+ const answer=matched.length?('TENS verified '+matched.length+' source statement'+(matched.length===1?'':'s')+' in this subject evidence bundle relevant to this section.'):'No direct verified finding in the current subject bundle matched this section.';
+ return '<div class="laneAnswer">'+escapeHtml(answer)+'</div>'+(items||'<div class="loading">This remains unresolved in the current admitted evidence bundle.</div>')
+}
+function renderRecords(){const rows=[...sourceMap.values()];recordsEl.innerHTML=rows.length?rows.map(s=>{const derived=String(s.authority||'')==='TENS_VERIFIED_DERIVED_CASE_SUMMARY',kind=derived?'Verified derived case summary':(s.recordType||s.sourceKind||'Public record'),inner='<strong>'+escapeHtml(s.label||'Evidence record')+'</strong><span>'+escapeHtml(kind)+(derived?' · derived from preserved source records':'')+(s.contentHash?' · SHA-256 '+escapeHtml(String(s.contentHash).slice(0,16))+'…':'')+'</span>';return s.url?'<a class="record" href="'+escapeHtml(s.url)+'" target="_blank" rel="noopener">'+inner+'</a>':'<div class="record">'+inner+'</div>'}).join(''):'<div class="loading">No public-safe source record has been attached yet.</div>'}
+function renderUnknowns(){const rows=[...unknownMap.values()];unknownEl.innerHTML=rows.length?rows.map(u=>'<div class="unknownItem">'+escapeHtml(u.statement||'This point remains unresolved.')+'</div>').join(''):'<div class="loading">No additional unresolved item was returned for this subject bundle.</div>'}
+function renderOverview(r){collect(r);const verified=r.verified||[];summary.textContent=r.answer==='UNKNOWN'?'TENS does not currently have enough admitted evidence to state an overview as established fact.':String(r.answer||'Current evidence loaded.');highlights.innerHTML=verified.slice(0,6).map(v=>'<li>'+escapeHtml(v.statement||'')+'</li>').join('');meta.textContent='One verified subject bundle · '+verified.length+' source statement'+(verified.length===1?'':'s')+' · '+(r.sources||[]).length+' supporting record'+((r.sources||[]).length===1?'':'s')+'.';renderRecords();renderUnknowns()}
+const snapshotKey='TENS_R210_TOPIC_BUNDLE_'+id;
+function saveSnapshot(bundle){try{localStorage.setItem(snapshotKey,JSON.stringify({version:2,id,title:cfg.title,savedAt:Date.now(),bundle}))}catch{}}
+function loadSnapshot(){try{const x=JSON.parse(localStorage.getItem(snapshotKey)||'null');if(!x||x.version!==2||x.id!==id||!x.bundle)return null;return x}catch{return null}}
+function renderBundle(r){
+ sourceMap.clear();unknownMap.clear();renderOverview(r);
+ cfg.lanes.forEach((lane,i)=>{const el=document.getElementById('lane'+i);el.innerHTML='<h2>'+escapeHtml(lane[0])+'</h2><div class="sub">'+escapeHtml(lane[1])+'</div>'+laneHtml(r,lane[1]);});
+ renderRecords();renderUnknowns()
+}
+const previous=loadSnapshot();
+if(previous){renderBundle(previous.bundle);const mins=Math.round(Math.max(0,Date.now()-previous.savedAt)/60000);updated.textContent='Latest verified R210 subject bundle loaded'+(mins<2?' just now':' · '+mins+' min ago')+' · checking for newer evidence…'}
+(async()=>{
+ const coverage=cfg.lanes.map(x=>x[0]+': '+x[1]).join(' ');
+ const dossierQ='Build one current evidence-backed subject dossier for '+cfg.title+'. Cover these sections from the same admitted evidence bundle: '+coverage+' Include verified findings, supporting records, and unresolved gaps. Facts first; do not speculate.';
+ try{
+   const r=await research(dossierQ);renderBundle(r);saveSnapshot(r);updated.textContent='Current R210 subject bundle loaded · '+new Date().toLocaleString();
+ }catch(e){
+   if(!previous){summary.textContent='TENS could not complete the subject bundle safely. No unsupported summary was generated.';meta.textContent=String(e.message||e);updated.textContent='Evidence refresh held safely'}
+ }
+})();
+document.getElementById('askForm').addEventListener('submit',e=>{e.preventDefault();const q=document.getElementById('ask').value.trim();if(q)location.href='results.html?q='+encodeURIComponent(q)});
+})();
+</script>
+</body>
+</html>

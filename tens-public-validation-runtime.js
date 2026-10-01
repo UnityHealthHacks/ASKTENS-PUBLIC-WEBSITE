@@ -17,8 +17,8 @@
     });
     return adapter;
   }
-  async function search(query){
-    const raw=await ensureAdapter().search(query);
+  async function search(query,options={}){
+    const raw=await ensureAdapter().search(query,options);
     const validation=window.TENS_EVIDENCE_GUARD.validateResult(raw);
     if(!validation.valid){
       return Object.assign(

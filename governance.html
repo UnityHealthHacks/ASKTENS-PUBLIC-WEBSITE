@@ -40,5 +40,6 @@ main{width:min(1120px,calc(100% - 34px));margin:auto;padding:58px 0 80px}.eyebro
 (()=>{const root=document.getElementById('packages'),xs=window.TENS_GOVERNANCE_PACKAGES?.packages||[],list=a=>'<ul>'+a.map(x=>'<li>'+x+'</li>').join('')+'</ul>';
 for(const p of xs){const el=document.createElement('article');el.className='card';const cls=p.availability==='VERIFIED_LEVEL1'?'verified':'controlled';const label=p.availability==='VERIFIED_LEVEL1'?'Verified Level 1':'Controlled onboarding';el.innerHTML='<span class="badge '+cls+'">'+label+'</span><h2>'+p.name+'</h2><div style="font-size:1rem;font-weight:800;margin:8px 0;color:#bde8ff">Monthly managed service · scoped quote</div><p>'+p.fit+'</p><h3>Included</h3>'+list(p.includes)+'<h3>What the organization provides</h3>'+list(p.requires)+'<div class="boundary"><strong>Boundary:</strong> '+p.boundary+'<br><br><strong>Quote:</strong> TENS sizes the monthly service from the actual governed environment — agents, systems, activity, integrations, monitoring frequency, reporting, recovery rules and responsibility. You receive the quote before activation.</div><p><a href="pricing.html" style="color:#bde8ff">Request a governance quote →</a></p>';root.appendChild(el)}})();
 </script>
+<script src="tens-i18n.js"></script>
 </body>
 </html>

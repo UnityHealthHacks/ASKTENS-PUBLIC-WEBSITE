@@ -4,7 +4,7 @@ const form=$('freeAssessmentForm'),business=$('freeBusinessType'),outcome=$('fre
 if(!form||!problem||!out)return;
 const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const norm=v=>String(v||'').toLowerCase().replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim();
-const baseById={ACCOUNTING:'Accounting',AUDIT:'Auditing & forensic review',CONSTRUCTION:'Construction & engineering',PROPERTY:'Property management',LEGAL:'Legal operations',HEALTHCARE_ADMIN:'Healthcare administration',MANUFACTURING:'Manufacturing',LOGISTICS:'Logistics & transportation',GOVERNMENT:'Government & municipal operations',GENERAL_BUSINESS:'Small & midsize business'};
+const baseById={ACCOUNTING:'Accounting',AUDIT:'Auditing & forensic review',CONSTRUCTION:'Construction & engineering',PROPERTY:'Property management',LEGAL:'Legal operations',HEALTHCARE_ADMIN:'Healthcare administration',MANUFACTURING:'Manufacturing',LOGISTICS:'Logistics & transportation',MARINA:'Marinas & boat clubs',RESTAURANT:'Restaurants & food service',GOVERNMENT:'Government & municipal operations',GENERAL_BUSINESS:'Small & midsize business'};
 function readinessFor(input,meta){
  const rows=window.TENS_BUSINESS_READINESS?.rows||[],q=norm(input);
  let best=null,bestScore=0;
@@ -12,11 +12,11 @@ function readinessFor(input,meta){
  if(!best&&baseById[meta?.industryId])best=rows.find(r=>r.label===baseById[meta.industryId]);
  return best||{label:meta?.industryLabel||'Business workflow',decision:'PASS_WITH_ONBOARDING',note:'TENS may be able to help, but this workflow needs its own setup and acceptance testing first.'};
 }
-function statusLabel(d){return d==='PASS_NOW'?'Ready now':d==='PASS_WITH_BOUNDARIES'?'Can help with limits':d==='FAIL'?'Not currently supported':'Setup required'}
+function statusLabel(d){const es=(window.TENS_I18N?.lang?.()||'en')==='es';return d==='PASS_NOW'?(es?'Listo ahora':'Ready now'):d==='PASS_WITH_BOUNDARIES'?(es?'Puede ayudar con límites':'Can help with limits'):d==='FAIL'?(es?'No compatible actualmente':'Not currently supported'):(es?'Requiere configuración':'Setup required')}
 function render(){
  const b=business?.value.trim()||'',goal=outcome?.value.trim()||'',issue=problem.value.trim(),text=[b,goal,issue].filter(Boolean).join(' — ');
  if(!issue){out.innerHTML='<strong>Tell TENS what is going wrong first.</strong>';return}
- const meta=window.TENS_BUSINESS_CAPABILITIES?.answer(text);
+ const language=window.TENS_I18N?.lang?.()||'en',meta=window.TENS_BUSINESS_CAPABILITIES?.answer(text,language);
  if(!meta||meta.state!=='BUSINESS_CAPABILITY_READY'){out.innerHTML='<strong>TENS cannot confirm a fit yet.</strong><br>Add a little more detail about the problem and the result you need.';return}
  const readiness=readinessFor(b+' '+issue,meta),caps=(meta.capabilities||[]).slice(0,4),needs=(meta.requires||[]).slice(0,3),blocked=(meta.blocked||[]).slice(0,2);
  out.innerHTML=
