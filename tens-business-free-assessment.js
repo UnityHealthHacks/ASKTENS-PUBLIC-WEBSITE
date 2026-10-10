@@ -6,11 +6,26 @@ const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;'
 const norm=v=>String(v||'').toLowerCase().replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim();
 const baseById={ACCOUNTING:'Accounting',AUDIT:'Auditing & forensic review',CONSTRUCTION:'Construction & engineering',PROPERTY:'Property management',LEGAL:'Legal operations',HEALTHCARE_ADMIN:'Healthcare administration',MANUFACTURING:'Manufacturing',LOGISTICS:'Logistics & transportation',MARINA:'Marinas & boat clubs',RESTAURANT:'Restaurants & food service',GOVERNMENT:'Government & municipal operations',GENERAL_BUSINESS:'Small & midsize business'};
 function explicitUnbuiltEndpointWork(input){
- const q=String(input||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
- const action=/\b(?:repair|fix|install|patch|configure|manage|remote control|remotely control|reparar|arreglar|instalar|actualizar|configurar|administrar|gestionar|controlar)\b/i;
- const device=/\b(?:computers?|laptops?|desktops?|pcs?|endpoints?|devices?|computadoras?|ordenadores?|portatiles?|dispositivos?|equipos?)\b/i;
+ const q=String(input||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+ const device=/\b(?:computers?|laptops?|desktops?|pcs?|macs?|endpoints?|devices?|workstations?|servers?|printers?|tablets?|computadoras?|ordenadores?|portatiles?|dispositivos?|equipos?|servidores?|impresoras?)\b/i;
+ const action=/\b(?:repair|repairs|fix|fixing|troubleshoot|troubleshooting|remote|remotely|control|clean|remove|reset|reinstall|update|upgrade|patch|install|configure|manage|login|log in|log into|support|reparar|reparacion|reparaciones|arreglar|instalar|actualizar|configurar|administrar|gestionar|controlar|limpiar|eliminar|restablecer|soporte)\b/i;
+ const specialized=/\b(?:remove (?:a |the )?(?:virus|malware)|virus removal|malware removal|reset passwords?|reinstall (?:windows|software)|update software|upgrade software|patch (?:systems?|software)|remote (?:into|access|control)|take control|log ?in|reparacion(?:es)?|soporte tecnico)\b/i;
+ const documentTarget=/\b(?:fix|repair|correct|update|clean|manage|arreglar|corregir|actualizar)\s+(?:(?:our|the|all|these|my|mis|los|las|nuestros?)\s+)?(?:invoices?|documents?|records?|spreadsheets?|reports?|contracts?|billing|facturas?|documentos?|registros?|informes?|contratos?)\b/i;
+ const noDeviceButMalwareWork=/\b(?:virus|malware|ransomware|spyware)\s+(?:removal|cleaning|cleanup|repair|elimination)\b|\b(?:remove|clean|eliminate)\s+(?:the\s+|a\s+)?(?:virus|malware|ransomware|spyware)\b/i;
+ if(!device.test(q)&&!noDeviceButMalwareWork.test(q))return null;
+ if(!action.test(q)&&!noDeviceButMalwareWork.test(q))return null;
+ const d='(?:computers?|laptops?|desktops?|pcs?|macs?|endpoints?|devices?|workstations?|servers?|printers?|tablets?|computadoras?|ordenadores?|portatiles?|dispositivos?|equipos?|servidores?|impresoras?)';
+ const a='(?:repair|repairs|fix|fixing|troubleshoot|troubleshooting|remote|remotely|control|clean|remove|reset|reinstall|update|upgrade|patch|install|configure|manage|login|log|support|reparar|reparacion|reparaciones|arreglar|instalar|actualizar|configurar|administrar|gestionar|controlar|limpiar|eliminar|restablecer|soporte)';
+ const directed=new RegExp('\\b'+a+'\\b(?:\\s+\\w+){0,7}\\s+'+d+'\\b|\\b'+d+'\\b(?:\\s+\\w+){0,4}\\s+'+a+'\\b','i').test(q);
+ const specializedWithDevice=(specialized.test(q)||noDeviceButMalwareWork.test(q))&&(device.test(q)||noDeviceButMalwareWork.test(q));
+ if(!directed&&!specializedWithDevice)return null;
+ if(documentTarget.test(q)&&!specializedWithDevice){
+  const directObject=new RegExp('\\b(?:repair|repairs|troubleshoot|troubleshooting|reparacion|reparar|remote|control|reset|reinstall)\\b(?:\\s+\\w+){0,4}\\s+'+d+'\\b','i');
+  if(!directObject.test(q))return null;
+ }
  const row=(window.TENS_RESEARCHED_BUSINESS_CAPABILITIES?.rows||[]).find(r=>r.id==='ENDPOINT_DEVICE_MANAGEMENT');
- return action.test(q)&&device.test(q)&&row&&String(row.decision||'').startsWith('FAIL')?row:null;
+ return {label:row?.label||'Endpoint / Device Monitoring & Repair',decision:'FAIL_UNTIL_ISOLATED_ARM_BUILT',
+  note:'Customer-computer repair, remote control and technical changes are not offered. An isolated, separately tested customer-device capability is required first.'};
 }
 function readinessFor(input,meta){
  const blocked=explicitUnbuiltEndpointWork(input);
