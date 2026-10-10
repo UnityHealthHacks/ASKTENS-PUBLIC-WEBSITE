@@ -60,4 +60,21 @@ check('ordinary accounting business results still advertise configurable core on
  assert.ok(r.verified.length>0);
  assert.notEqual(r.audit?.resultState,'SERVICE_NOT_READY');
 });
-console.log('9/9 REAL-REGISTRY browser-mock checks PASS. Historical classifications are NOT R212 current acceptance.');
+check('results route holds unproved network repair and incident remediation',()=>{
+ const {w}=make();
+ for(const q of ['Our network is down','Hacked email account, recover it','Set up VPN for staff']){
+  const r=w.TENS_BUSINESS_CAPABILITIES.toResult(q,'en');
+  assert.equal(r.verified.length,0,q);
+  assert.equal(r.unknown[0].unknownReason,'SERVICE_NOT_READY');
+ }
+});
+check('results route keeps documentary network incident reports as configurable evidence work',()=>{
+ const {w}=make(),r=w.TENS_BUSINESS_CAPABILITIES.toResult('Review network outage reports','en');
+ assert.ok(r.verified.length>0);
+});
+check('Spanish free preview emits localized not ready details',()=>{
+ const h=make('es'),x=h.request('Consultoría','Necesito acceso remoto a mi PC');
+ assert.equal(x.blocked,true);
+ assert.match(x.html,/capacidad aislada/);
+});
+console.log('12/12 REAL-REGISTRY browser-mock checks PASS. Historical classifications are NOT R212 current acceptance.');
