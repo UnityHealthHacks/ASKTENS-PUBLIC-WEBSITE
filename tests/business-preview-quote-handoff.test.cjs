@@ -17,7 +17,7 @@ function harness(lang='en'){
  const makeIds=(ids)=>Object.fromEntries(ids.map(id=>[id,{value:'',innerHTML:'',hidden:true,textContent:'',listeners:{},addEventListener(type,fn){this.listeners[type]=fn}}]));
  const fresh=makeIds(['freeAssessmentForm','freeBusinessType','freeOutcome','freeProblem','freeAssessmentResult','freeAssessmentProceed']);
  const pricingIds=makeIds(['quoteForm','quoteStatus','quoteName','quoteBusiness','quoteEmail','quoteProblem']);
- const ctx={sessionStorage,store,freeEls:fresh,quoteEls:pricingIds,previewUrl:{href:'',search:''},quoteUrl:{href:'',search:'?from=preview'}};
+ const ctx={sessionStorage,store,freeEls:fresh,quoteEls:pricingIds,previewUrl:{href:'',search:''},quoteUrl:{href:'',search:'?from=preview',pathname:'/pricing.html',hash:''},historyCalls:[]};
  const readiness={rows:[{label:'Construction & engineering',decision:'PASS_NOW',note:'Historical tested domain; onboarding required for customer.'}]};
  const researched={rows:[{id:'ENDPOINT_DEVICE_MANAGEMENT',label:'Endpoint / Device Monitoring & Repair',decision:'FAIL_UNTIL_ISOLATED_ARM_BUILT'}]};
  function runPreview(business,goal,issue){
@@ -31,7 +31,7 @@ function harness(lang='en'){
  }
  function runPricing(search='?from=preview'){
   ctx.quoteUrl.search=search;
-  const sandbox={document:{getElementById:id=>pricingIds[id]||null},sessionStorage,localStorage:{getItem:k=>k==='tensLanguage'?lang:null},location:ctx.quoteUrl,URLSearchParams,Date,encodeURIComponent};
+  const sandbox={document:{getElementById:id=>pricingIds[id]||null},sessionStorage,localStorage:{getItem:k=>k==='tensLanguage'?lang:null},history:{replaceState:(a,b,url)=>ctx.historyCalls.push(url)},location:ctx.quoteUrl,URLSearchParams,Date,encodeURIComponent};
   vm.runInNewContext(priceScript,sandbox);
   return pricingIds;
  }
@@ -49,6 +49,7 @@ test('opt-in free preview keeps relevant context only in sessionStorage and pres
  assert.equal(q.quoteEmail.value,'');
  assert.equal(h.ctx.store.size,0);
  assert.match(q.quoteStatus.textContent,/Nothing has been sent/);
+ assert.deepEqual(h.ctx.historyCalls,['/pricing.html']);
  assert.equal(h.ctx.quoteUrl.href,'');
 });
 test('expired or stale preview is never restored',()=>{
@@ -92,5 +93,12 @@ test('Spanish stale quote restore fails closed in Spanish',()=>{
  const q=h.runPricing();
  assert.match(q.quoteStatus.textContent,/caducó/);
  assert.equal(q.quoteProblem.value,'');
+});
+test('direct visit does not clear or rewrite existing quote URL',()=>{
+ const h=harness();h.runPricing('');assert.deepEqual(h.ctx.historyCalls,[]);
+});
+test('stale preview marker is removed after expiration',()=>{
+ const h=harness();h.ctx.store.set('tens_business_quote_draft_v1',JSON.stringify({createdAt:Date.now()-16*60*1000,business:'stale',goal:'',problem:'expired'}));
+ h.runPricing();assert.deepEqual(h.ctx.historyCalls,['/pricing.html']);
 });
 console.log(passed+'/'+passed+' synthetic browser flow tests PASS; NOT a live production or AI integration test.');
