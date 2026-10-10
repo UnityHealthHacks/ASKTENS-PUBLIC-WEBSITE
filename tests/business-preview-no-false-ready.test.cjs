@@ -5,6 +5,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
 const code=fs.readFileSync(path.join(__dirname,'..','tens-business-free-assessment.js'),'utf8');
+const coreCode=fs.readFileSync(path.join(__dirname,'..','tens-business-capabilities.js'),'utf8');
 function preview(businessType,problemText,lang='en',missingRegistry=false){
  const els={};for(const id of ['freeAssessmentForm','freeBusinessType','freeOutcome','freeProblem','freeAssessmentResult','freeAssessmentProceed'])els[id]={value:'',innerHTML:'',hidden:true,listeners:{},addEventListener(type,fn){this.listeners[type]=fn}};
  els.freeBusinessType.value=businessType;els.freeProblem.value=problemText;
@@ -12,10 +13,12 @@ function preview(businessType,problemText,lang='en',missingRegistry=false){
   TENS_I18N:{lang:()=>lang},
   TENS_BUSINESS_READINESS:{rows:[{label:'Business back office',decision:'PASS_NOW',note:'Historical verified domain; per-customer work still requires onboarding.'}]},
   TENS_RESEARCHED_BUSINESS_CAPABILITIES:{rows:[{id:'ENDPOINT_DEVICE_MANAGEMENT',label:'Endpoint / Device Monitoring & Repair',decision:'FAIL_UNTIL_ISOLATED_ARM_BUILT'}]},
-  TENS_BUSINESS_CAPABILITIES:{answer:()=>({state:'BUSINESS_CAPABILITY_READY',plainAnswer:'Document coordination may be possible.',capabilities:[{description:'Organize records'}],requires:['Approved files'],blocked:['External changes require authorization']})}
  };
+ const sandbox={window,document:{getElementById:id=>els[id]||null},location:{href:''},Date};
+ vm.runInNewContext(coreCode,sandbox);
+ window.TENS_BUSINESS_CAPABILITIES={...window.TENS_BUSINESS_CAPABILITIES,answer:()=>({state:'BUSINESS_CAPABILITY_READY',plainAnswer:'Document coordination may be possible.',capabilities:[{description:'Organize records'}],requires:['Approved files'],blocked:['External changes require authorization']})};
  if(missingRegistry)delete window.TENS_RESEARCHED_BUSINESS_CAPABILITIES;
- vm.runInNewContext(code,{window,document:{getElementById:id=>els[id]||null},location:{href:''}});
+ vm.runInNewContext(code,sandbox);
  els.freeAssessmentForm.listeners.submit({preventDefault(){}});
  return {html:els.freeAssessmentResult.innerHTML,proceed:els.freeAssessmentProceed.hidden};
 }
