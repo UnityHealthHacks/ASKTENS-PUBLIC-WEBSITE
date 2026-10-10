@@ -19,9 +19,13 @@ function explicitUnbuiltEndpointWork(input){
  const directed=new RegExp('\\b'+a+'\\b(?:\\s+\\w+){0,7}\\s+'+d+'\\b|\\b'+d+'\\b(?:\\s+\\w+){0,4}\\s+'+a+'\\b','i').test(q);
  const specializedWithDevice=(specialized.test(q)||noDeviceButMalwareWork.test(q))&&(device.test(q)||noDeviceButMalwareWork.test(q));
  if(!directed&&!specializedWithDevice)return null;
- if(documentTarget.test(q)&&!specializedWithDevice){
-  const directObject=new RegExp('\\b(?:repair|repairs|troubleshoot|troubleshooting|reparacion|reparar|remote|control|reset|reinstall)\\b(?:\\s+\\w+){0,4}\\s+'+d+'\\b','i');
-  if(!directObject.test(q))return null;
+ const docContext=/\b(?:compare|reconcile|review|summarize|track|audit|organize|analyze|check|preparar|revisar|comparar|conciliar|resumir)\b(?:\s+\w+){0,7}\s+(?:invoices?|documents?|records?|spreadsheets?|reports?|contracts?|billing|payments?|facturas?|documentos?|registros?|informes?|contratos?|pagos?)\b/i;
+ if((documentTarget.test(q)||docContext.test(q))&&!specializedWithDevice){
+  // Remove a documentary target ("fix invoices") before looking for a
+  // second, actual device-change command ("and repair the laptops").
+  const withoutDoc=q.replace(documentTarget,' ');
+  const explicitDeviceAction=new RegExp('\\b(?:repair|fix|troubleshoot|reset|remote|control|reinstall|install|configure|reparar|arreglar|configurar|controlar)\\b(?:\\s+\\w+){0,6}\\s+'+d+'\\b','i');
+  if(!explicitDeviceAction.test(withoutDoc))return null;
  }
  const row=(window.TENS_RESEARCHED_BUSINESS_CAPABILITIES?.rows||[]).find(r=>r.id==='ENDPOINT_DEVICE_MANAGEMENT');
  return {label:row?.label||'Endpoint / Device Monitoring & Repair',decision:'FAIL_UNTIL_ISOLATED_ARM_BUILT',
