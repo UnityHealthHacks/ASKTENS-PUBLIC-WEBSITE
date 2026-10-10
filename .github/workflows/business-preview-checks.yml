@@ -37,3 +37,5 @@ jobs:
         run: node tests/business-preview-real-registry.test.cjs
       - name: Test rejected and missing organization sessions
         run: node tests/business-work-client-authorization.test.cjs
+      - name: Exercise mobile browser assessment and quote handoff in Chromium
+        run: node tests/business-preview-headless-browser.test.cjs
