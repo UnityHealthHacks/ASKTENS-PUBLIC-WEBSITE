@@ -38,10 +38,26 @@ check('actual registry flags unsupported remote laptop maintenance',()=>{
 });
 check('actual registry holds Spanish unsupported computer repair',()=>{
  const h=make(),x=h.request('Accounting firm','Reparación de computadoras en mi oficina');
- assert.equal(x.blocked,true);assert.match(x.html,/not available/i);
+ assert.equal(x.blocked,true);assert.match(x.html,/todavía no está disponible/i);
 });
 check('actual registry invoice review about past laptop repairs remains allowed',()=>{
  const h=make(),x=h.request('Accounting firm','Compare invoices for completed laptop repairs');
  assert.equal(x.blocked,false);assert.match(x.html,/free TENS fit check/i);
 });
-console.log('6/6 REAL-REGISTRY browser-mock checks PASS. Historical classifications are NOT R212 current acceptance.');
+check('business results route suppresses capability claims for unsupported laptop control',()=>{
+ const {w}=make(),r=w.TENS_BUSINESS_CAPABILITIES.toResult('Can TENS remote into our laptops and clean malware?','en');
+ assert.equal(r.mode,'BUSINESS_CAPABILITY');assert.match(r.plainAnswer,/does not offer customer-device repair/);
+ assert.equal(r.verified.length,0);assert.equal(r.unknown[0].unknownReason,'SERVICE_NOT_READY');
+});
+check('Spanish business results route is explicitly NOT READY',()=>{
+ const {w}=make(),r=w.TENS_BUSINESS_CAPABILITIES.toResult('¿Puede TENS hacer reparación de computadoras?','es');
+ assert.match(r.plainAnswer,/no ofrece reparación/);
+ assert.equal(r.verified.length,0);assert.equal(r.unknown[0].unknownReason,'SERVICE_NOT_READY');
+});
+check('ordinary accounting business results still advertise configurable core only',()=>{
+ const {w}=make(),r=w.TENS_BUSINESS_CAPABILITIES.toResult('How can TENS help reconcile accounting invoices?','en');
+ assert.equal(r.mode,'BUSINESS_CAPABILITY');
+ assert.ok(r.verified.length>0);
+ assert.notEqual(r.audit?.resultState,'SERVICE_NOT_READY');
+});
+console.log('9/9 REAL-REGISTRY browser-mock checks PASS. Historical classifications are NOT R212 current acceptance.');
