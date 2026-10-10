@@ -5,20 +5,35 @@ if(!form||!problem||!out)return;
 const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const norm=v=>String(v||'').toLowerCase().replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim();
 const baseById={ACCOUNTING:'Accounting',AUDIT:'Auditing & forensic review',CONSTRUCTION:'Construction & engineering',PROPERTY:'Property management',LEGAL:'Legal operations',HEALTHCARE_ADMIN:'Healthcare administration',MANUFACTURING:'Manufacturing',LOGISTICS:'Logistics & transportation',MARINA:'Marinas & boat clubs',RESTAURANT:'Restaurants & food service',GOVERNMENT:'Government & municipal operations',GENERAL_BUSINESS:'Small & midsize business'};
+function explicitUnbuiltEndpointWork(input){
+ const q=String(input||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+ const action=/\b(?:repair|fix|install|patch|configure|manage|remote control|remotely control|reparar|arreglar|instalar|actualizar|configurar|administrar|gestionar|controlar)\b/i;
+ const device=/\b(?:computers?|laptops?|desktops?|pcs?|endpoints?|devices?|computadoras?|ordenadores?|portatiles?|dispositivos?|equipos?)\b/i;
+ const row=(window.TENS_RESEARCHED_BUSINESS_CAPABILITIES?.rows||[]).find(r=>r.id==='ENDPOINT_DEVICE_MANAGEMENT');
+ return action.test(q)&&device.test(q)&&row&&String(row.decision||'').startsWith('FAIL')?row:null;
+}
 function readinessFor(input,meta){
+ const blocked=explicitUnbuiltEndpointWork(input);
+ if(blocked)return {label:blocked.label,decision:blocked.decision,note:'Customer-computer repair and control are not offered. An isolated, separately tested customer-computer capability is required first.'};
  const rows=window.TENS_BUSINESS_READINESS?.rows||[],q=norm(input);
  let best=null,bestScore=0;
  for(const row of rows){const words=norm(row.label).split(' ').filter(x=>x.length>3),score=words.filter(w=>q.includes(w)).length;if(score>bestScore){bestScore=score;best=row}}
  if(!best&&baseById[meta?.industryId])best=rows.find(r=>r.label===baseById[meta.industryId]);
  return best||{label:meta?.industryLabel||'Business workflow',decision:'PASS_WITH_ONBOARDING',note:'TENS may be able to help, but this workflow needs its own setup and acceptance testing first.'};
 }
-function statusLabel(d){const es=(window.TENS_I18N?.lang?.()||'en')==='es';return d==='PASS_NOW'?(es?'Listo ahora':'Ready now'):d==='PASS_WITH_BOUNDARIES'?(es?'Puede ayudar con límites':'Can help with limits'):d==='FAIL'?(es?'No compatible actualmente':'Not currently supported'):(es?'Requiere configuración':'Setup required')}
+function statusLabel(d){const es=(window.TENS_I18N?.lang?.()||'en')==='es';return d==='PASS_NOW'?(es?'Listo ahora':'Ready now'):d==='PASS_WITH_BOUNDARIES'?(es?'Puede ayudar con límites':'Can help with limits'):(d==='FAIL'||String(d).startsWith('FAIL_'))?(es?'Aún no está listo':'Not ready yet'):(es?'Requiere configuración':'Setup required')}
 function render(){
  const b=business?.value.trim()||'',goal=outcome?.value.trim()||'',issue=problem.value.trim(),text=[b,goal,issue].filter(Boolean).join(' — ');
- if(!issue){out.innerHTML='<strong>Tell TENS what is going wrong first.</strong>';return}
+ if(!issue){out.innerHTML='<strong>Tell TENS what is going wrong first.</strong>';if(proceed)proceed.hidden=true;return}
  const language=window.TENS_I18N?.lang?.()||'en',meta=window.TENS_BUSINESS_CAPABILITIES?.answer(text,language);
- if(!meta||meta.state!=='BUSINESS_CAPABILITY_READY'){out.innerHTML='<strong>TENS cannot confirm a fit yet.</strong><br>Add a little more detail about the problem and the result you need.';return}
- const readiness=readinessFor(b+' '+issue,meta),caps=(meta.capabilities||[]).slice(0,4),needs=(meta.requires||[]).slice(0,3),blocked=(meta.blocked||[]).slice(0,2);
+ if(!meta||meta.state!=='BUSINESS_CAPABILITY_READY'){out.innerHTML='<strong>TENS cannot confirm a fit yet.</strong><br>Add a little more detail about the problem and the result you need.';if(proceed)proceed.hidden=true;return}
+ const readiness=readinessFor(text,meta);
+ if(String(readiness.decision||'').startsWith('FAIL')){
+  out.innerHTML='<div class="trialbadge">'+esc(statusLabel(readiness.decision))+'</div><h3>This exact task is not available</h3><p>'+esc(readiness.note)+'</p><p>TENS may still help organize related records or prepare a review, but it cannot control, repair, or change customer devices under the current beta.</p>';
+  if(proceed){proceed.hidden=true;proceed.onclick=null}
+  return;
+ }
+ const caps=(meta.capabilities||[]).slice(0,4),needs=(meta.requires||[]).slice(0,3),blocked=(meta.blocked||[]).slice(0,2);
  out.innerHTML=
   '<div class="trialbadge">'+esc(statusLabel(readiness.decision))+'</div>'+
   '<h3>Your free TENS fit check</h3>'+
