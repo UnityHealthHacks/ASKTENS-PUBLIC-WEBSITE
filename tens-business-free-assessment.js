@@ -44,7 +44,13 @@ function render(){
   '<p><strong>What still needs a person or special approval:</strong></p><ul>'+blocked.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>'+
   '<p class="trialnote">'+esc(readiness.note)+'</p>'+
   '<div class="trialoffer"><strong>Next step if you want TENS to continue:</strong><br><span>If private records or system access are needed, TENS will first show you a one-time diagnostic fee before access begins. After the diagnostic, TENS gives you a plain-English findings summary, a realistic time range, and the price to finish. You choose whether to proceed. Billing is not active on this beta page yet.</span></div>';
- if(proceed){proceed.hidden=false;proceed.onclick=()=>{location.href='pricing.html'}}
+ if(proceed){proceed.hidden=false;proceed.onclick=()=>{
+  // One-time, tab-local handoff. Never place the entered problem in a URL or send it.
+  try{sessionStorage.setItem('tens_business_quote_draft_v1',JSON.stringify({
+    createdAt:Date.now(),business:b.slice(0,180),goal:goal.slice(0,240),problem:issue.slice(0,3000)
+  }))}catch{}
+  location.href='pricing.html?from=preview'
+ }}
 }
 form.addEventListener('submit',e=>{e.preventDefault();render()});
 })();
