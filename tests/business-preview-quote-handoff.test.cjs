@@ -4,6 +4,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const dir=path.join(__dirname,'..');
 const free=fs.readFileSync(path.join(dir,'tens-business-free-assessment.js'),'utf8');
+const core=fs.readFileSync(path.join(dir,'tens-business-capabilities.js'),'utf8');
 const pricing=fs.readFileSync(path.join(dir,'pricing.html'),'utf8');
 const match=pricing.match(/<script>\s*([\s\S]*?)<\/script>\s*<script src="tens-i18n.js">/);
 assert.ok(match,'Pricing inline script must be uniquely found');
@@ -21,7 +22,9 @@ function harness(lang='en'){
  const researched={rows:[{id:'ENDPOINT_DEVICE_MANAGEMENT',label:'Endpoint / Device Monitoring & Repair',decision:'FAIL_UNTIL_ISOLATED_ARM_BUILT'}]};
  function runPreview(business,goal,issue){
   fresh.freeBusinessType.value=business;fresh.freeOutcome.value=goal;fresh.freeProblem.value=issue;
-  const sandbox={window:{TENS_I18N:{lang:()=> 'en'},TENS_BUSINESS_READINESS:readiness,TENS_RESEARCHED_BUSINESS_CAPABILITIES:researched,TENS_BUSINESS_CAPABILITIES:{answer:()=>({state:'BUSINESS_CAPABILITY_READY',plainAnswer:'May support limited evidence review.',capabilities:[{description:'Record review'}],requires:['Scope and data'],blocked:['External writes']})}},document:{getElementById:id=>fresh[id]||null},sessionStorage,location:ctx.previewUrl,Date};
+  const sandbox={window:{TENS_I18N:{lang:()=> 'en'},TENS_BUSINESS_READINESS:readiness,TENS_RESEARCHED_BUSINESS_CAPABILITIES:researched},document:{getElementById:id=>fresh[id]||null},sessionStorage,location:ctx.previewUrl,Date};
+  vm.runInNewContext(core,sandbox);
+  sandbox.window.TENS_BUSINESS_CAPABILITIES={...sandbox.window.TENS_BUSINESS_CAPABILITIES,answer:()=>({state:'BUSINESS_CAPABILITY_READY',plainAnswer:'May support limited evidence review.',capabilities:[{description:'Record review'}],requires:['Scope and data'],blocked:['External writes']})};
   vm.runInNewContext(free,sandbox);
   fresh.freeAssessmentForm.listeners.submit({preventDefault(){}});
   return fresh.freeAssessmentProceed;
