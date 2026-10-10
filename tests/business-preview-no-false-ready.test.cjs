@@ -61,4 +61,37 @@ for(const phrase of [
  const x=preview('Business back office',phrase);
  assert.doesNotMatch(x.html,/This exact task is not available/);assert.equal(x.proceed,false);
 });
+
+const additionalHolds=[
+ 'Connect to my computer and delete files',
+ 'wipe the hard drive of old laptops',
+ 'Set up new employee laptops',
+ 'Install antivirus',
+ 'Monitor our endpoints',
+ 'Backup our servers',
+ 'Reboot the server every night',
+ "Computer won't turn on, help",
+ 'My laptop is slow',
+ 'Set up VPN for staff',
+ 'Our wifi router keeps dropping',
+ 'Our network is down',
+ 'Ransomware locked our files',
+ 'Hacked email account, recover it',
+ 'reinicia mi computadora',
+ 'Mi computadora no funciona',
+ 'Necesito acceso remoto a mi PC'
+];
+for(const phrase of additionalHolds)test('expanded endpoint/network HOLD: '+phrase,()=>{
+ const x=preview('Business back office',phrase,'en');
+ assert.match(x.html,/Not ready yet/);assert.equal(x.proceed,true);
+});
+for(const phrase of [
+ 'Review network outage reports',
+ 'Compare antivirus renewal invoices',
+ 'Track wifi router maintenance invoices',
+ 'Audit costs of laptop backups'
+])test('network/device paperwork remains eligible for document preview: '+phrase,()=>{
+ const x=preview('Business back office',phrase,'en');
+ assert.doesNotMatch(x.html,/This exact task is not available/);assert.equal(x.proceed,false);
+});
 console.log(n+'/'+n+' static business-preview tests PASS; production admission NOT tested.');
