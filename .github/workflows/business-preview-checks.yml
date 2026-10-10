@@ -1,0 +1,39 @@
+name: Business preview regression checks
+
+on:
+  pull_request:
+    paths:
+      - 'business.html'
+      - 'pricing.html'
+      - 'tens-business-*.js'
+      - 'tens-researched-business-capabilities.js'
+      - 'tests/business-*.test.cjs'
+      - '.github/workflows/business-preview-checks.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-customer-flow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out exact proposed website changes
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify JavaScript parses
+        run: |
+          node --check tens-business-capabilities.js
+          node --check tens-business-free-assessment.js
+          node --check tens-business-work-client.js
+      - name: Test free business preview policy
+        run: node tests/business-preview-no-false-ready.test.cjs
+      - name: Test opt-in preview to quote handoff
+        run: node tests/business-preview-quote-handoff.test.cjs
+      - name: Test actual business registry in browser mock
+        run: node tests/business-preview-real-registry.test.cjs
+      - name: Test rejected and missing organization sessions
+        run: node tests/business-work-client-authorization.test.cjs
