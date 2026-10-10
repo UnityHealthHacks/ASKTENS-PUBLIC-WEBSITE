@@ -10,7 +10,7 @@ assert.ok(match,'Pricing inline script must be uniquely found');
 const priceScript=match[1];
 let passed=0;
 function test(name,fn){fn();console.log('PASS '+name);passed++}
-function harness(){
+function harness(lang='en'){
  const store=new Map();
  const sessionStorage={setItem:(k,v)=>store.set(k,String(v)),getItem:k=>store.has(k)?store.get(k):null,removeItem:k=>store.delete(k)};
  const makeIds=(ids)=>Object.fromEntries(ids.map(id=>[id,{value:'',innerHTML:'',hidden:true,textContent:'',listeners:{},addEventListener(type,fn){this.listeners[type]=fn}}]));
@@ -28,7 +28,7 @@ function harness(){
  }
  function runPricing(search='?from=preview'){
   ctx.quoteUrl.search=search;
-  const sandbox={document:{getElementById:id=>pricingIds[id]||null},sessionStorage,location:ctx.quoteUrl,URLSearchParams,Date,encodeURIComponent};
+  const sandbox={document:{getElementById:id=>pricingIds[id]||null},sessionStorage,localStorage:{getItem:k=>k==='tensLanguage'?lang:null},location:ctx.quoteUrl,URLSearchParams,Date,encodeURIComponent};
   vm.runInNewContext(priceScript,sandbox);
   return pricingIds;
  }
@@ -73,5 +73,21 @@ test('quote still requires explicit user submit before email-app navigation',()=
  q.quoteForm.listeners.submit({preventDefault(){}});
  assert.match(h.ctx.quoteUrl.href,/^mailto:/);
  assert.match(q.quoteStatus.textContent,/Review it, then send it when ready/);
+});
+
+test('Spanish quote restore confirms user review and no transmission',()=>{
+ const h=harness('es'),b=h.runPreview('Construcción','Comparar facturas','Revisar facturas de proveedores');
+ b.onclick();
+ const q=h.runPricing();
+ assert.match(q.quoteStatus.textContent,/No se envió nada/);
+ assert.match(q.quoteProblem.value,/Revisar facturas de proveedores/);
+ assert.equal(q.quoteEmail.value,'');
+});
+test('Spanish stale quote restore fails closed in Spanish',()=>{
+ const h=harness('es');
+ h.ctx.store.set('tens_business_quote_draft_v1',JSON.stringify({createdAt:Date.now()-25*60*1000,business:'X',goal:'Y',problem:'Caducado'}));
+ const q=h.runPricing();
+ assert.match(q.quoteStatus.textContent,/caducó/);
+ assert.equal(q.quoteProblem.value,'');
 });
 console.log(passed+'/'+passed+' synthetic browser flow tests PASS; NOT a live production or AI integration test.');
