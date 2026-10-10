@@ -8,7 +8,7 @@ const baseById={ACCOUNTING:'Accounting',AUDIT:'Auditing & forensic review',CONST
 function explicitUnbuiltEndpointWork(input){
  const gate=window.TENS_BUSINESS_CAPABILITIES?.unsupportedEndpointWork;
  if(typeof gate!=='function')return {label:'Business authorization',decision:'FAIL_POLICY_NOT_LOADED',note:'The capability policy did not load. TENS cannot confirm this service as available.'};
- return gate(input);
+ return gate(input,window.TENS_I18N?.lang?.()||'en');
 }
 function readinessFor(input,meta){
  const blocked=explicitUnbuiltEndpointWork(input);
