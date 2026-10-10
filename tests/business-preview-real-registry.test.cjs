@@ -8,12 +8,12 @@ const capability=file('tens-business-capabilities.js');
 const readiness=file('tens-business-readiness.js');
 const researched=file('tens-researched-business-capabilities.js');
 const free=file('tens-business-free-assessment.js');
-function make(){
+function make(lang='en'){
  const ids={};
  for(const id of ['freeAssessmentForm','freeBusinessType','freeOutcome','freeProblem','freeAssessmentResult','freeAssessmentProceed']){
   ids[id]={value:'',innerHTML:'',hidden:true,listeners:{},addEventListener(k,fn){this.listeners[k]=fn}};
  }
- const w={TENS_I18N:{lang:()=> 'en'}};
+ const w={TENS_I18N:{lang:()=>lang}};
  const context=vm.createContext({window:w,document:{getElementById:id=>ids[id]||null},location:{href:''},Date,sessionStorage:{setItem(){},getItem(){return null},removeItem(){}}});
  for(const js of [capability,readiness,researched,free])vm.runInContext(js,context);
  return {ids,w,request(b,q){ids.freeBusinessType.value=b;ids.freeProblem.value=q;ids.freeAssessmentForm.listeners.submit({preventDefault(){}});return {html:ids.freeAssessmentResult.innerHTML,blocked:ids.freeAssessmentProceed.hidden}}};
@@ -37,7 +37,7 @@ check('actual registry flags unsupported remote laptop maintenance',()=>{
  assert.equal(x.blocked,true);assert.match(x.html,/Not ready yet/);
 });
 check('actual registry holds Spanish unsupported computer repair',()=>{
- const h=make(),x=h.request('Accounting firm','Reparación de computadoras en mi oficina');
+ const h=make('es'),x=h.request('Accounting firm','Reparación de computadoras en mi oficina');
  assert.equal(x.blocked,true);assert.match(x.html,/todavía no está disponible/i);
 });
 check('actual registry invoice review about past laptop repairs remains allowed',()=>{
