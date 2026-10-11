@@ -10,7 +10,7 @@ CREATE INDEX idx_research_jobs_state_created ON research_jobs(state,created_at);
 CREATE TABLE internal_nonces(nonce TEXT PRIMARY KEY,created_at INTEGER NOT NULL);`;
 function d1(){
  const db=new DatabaseSync(':memory:');db.exec(SCHEMA);db.exec(fs.readFileSync(path.join(dir,'d1-queue-migration.sql'),'utf8'));
- return {raw:db,prepare(sql){const st=db.prepare(sql);return {bind(...a){return {
+ return {raw:db,prepare(sql){const st=db.prepare(sql);return {async all(){return {results:st.all()}},bind(...a){return {
   async run(){const r=st.run(...a);return {meta:{changes:Number(r.changes)}}},
   async first(){return st.get(...a)||null}}}}}};
 }

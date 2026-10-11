@@ -5,11 +5,27 @@
 export const MAX_ACTIVE=50,TTL_MS=86400000,CLAIM_MS=600000,MAX_QUESTION=1200,MAX_RESULT_CHARS=500000,NONCE_MS=300000;
 export const jobIdOk=x=>/^R20[23]WEB_[A-Za-z0-9_-]{20,80}$/.test(String(x||''));
 export function resultOk(x){return !!x&&x.protocol==='TENS_R202_PUBLIC_RESULT_1'&&x.state==='COMPLETE'&&x.providerWrite===false&&x.productionMutation===false&&typeof x.assignmentId==='string'&&typeof x.checkpointHash==='string'&&Array.isArray(x.verified)&&Array.isArray(x.unknowns)&&Array.isArray(x.sources)}
+// Server-side mirror of the browser evidence guard: every verified finding must cite a preserved public source.
+export function sourceProblem(r){
+ const ids=new Map();
+ for(const x of r.sources){
+  if(!x||typeof x.evidenceId!=='string'||x.preservationVerified!==true)return 'SOURCE_NOT_PRESERVED';
+  const archived=x.sourceKind==='ARCHIVED_PUBLIC_RECORD';
+  if(!archived&&!/^https:\/\//.test(String(x.url||'')))return 'SOURCE_NOT_PUBLIC';
+  if(archived&&!/^[a-f0-9]{64}$/i.test(String(x.contentHash||'')))return 'SOURCE_HASH_MISSING';
+  ids.set(x.evidenceId,x);
+ }
+ for(const v of r.verified){if(!Array.isArray(v?.evidenceRefs)||!v.evidenceRefs.length||!v.evidenceRefs.every(i=>ids.has(i)))return 'VERIFIED_UNCITED'}
+ return '';
+}
 const changes=r=>Number(r?.meta?.changes??r?.changes??0);
 
-export async function enqueue(db,{id,question,now=Date.now(),maxActive=MAX_ACTIVE}){
- const r=await db.prepare("INSERT INTO research_jobs(id,question,state,result_json,error_code,created_at,updated_at) SELECT ?1,?2,'QUEUED',NULL,NULL,?3,?3 WHERE (SELECT COUNT(*) FROM research_jobs WHERE state IN ('QUEUED','RUNNING') AND created_at>?4)<?5").bind(id,question,now,now-TTL_MS,maxActive).run();
- return changes(r)===1?{state:'QUEUED',jobId:id}:{error:'RESEARCH_QUEUE_BUSY'};
+export const MAX_PER_SESSION=3;
+export async function enqueue(db,{id,question,now=Date.now(),maxActive=MAX_ACTIVE,sessionHash=null,perSession=MAX_PER_SESSION}){
+ const r=await db.prepare("INSERT INTO research_jobs(id,question,state,result_json,error_code,created_at,updated_at,session_hash) SELECT ?1,?2,'QUEUED',NULL,NULL,?3,?3,?6 WHERE (SELECT COUNT(*) FROM research_jobs WHERE state IN ('QUEUED','RUNNING') AND created_at>?4)<?5 AND (?6 IS NULL OR (SELECT COUNT(*) FROM research_jobs WHERE session_hash=?6 AND state IN ('QUEUED','RUNNING') AND created_at>?4)<?7)").bind(id,question,now,now-TTL_MS,maxActive,sessionHash,perSession).run();
+ if(changes(r)===1)return {state:'QUEUED',jobId:id};
+ if(sessionHash){const c=await db.prepare("SELECT COUNT(*) AS n FROM research_jobs WHERE session_hash=?1 AND state IN ('QUEUED','RUNNING') AND created_at>?2").bind(sessionHash,now-TTL_MS).first();if(Number(c?.n)>=perSession)return {error:'SESSION_QUEUE_BUSY'}}
+ return {error:'RESEARCH_QUEUE_BUSY'};
 }
 export async function expireStale(db,now=Date.now()){
  const r=await db.prepare("UPDATE research_jobs SET state='FAILED',error_code='EXPIRED_UNCLAIMED',claim_token=NULL,claim_expires_at=NULL,updated_at=?1 WHERE state IN ('QUEUED','RUNNING') AND created_at<=?2 AND (state='QUEUED' OR claim_expires_at<=?1)").bind(now,now-TTL_MS).run();
@@ -25,6 +41,7 @@ export async function claim(db,{now=Date.now(),token=crypto.randomUUID()}={}){
 export async function complete(db,{jobId,claimToken,result,now=Date.now()}){
  if(!jobIdOk(jobId)||!resultOk(result))return {status:400,error:'RESULT_SCHEMA_REJECTED'};
  const payload=JSON.stringify(result);if(payload.length>MAX_RESULT_CHARS)return {status:413,error:'RESULT_TOO_LARGE'};
+ const sp=sourceProblem(result);if(sp)return {status:400,error:'RESULT_NOT_SOURCE_BACKED_'+sp};
  if(typeof claimToken!=='string'||!claimToken)return {status:409,error:'JOB_STATE_CONFLICT'};
  const r=await db.prepare("UPDATE research_jobs SET state='COMPLETE',result_json=?1,error_code=NULL,claim_token=NULL,claim_expires_at=NULL,updated_at=?2 WHERE id=?3 AND state='RUNNING' AND claim_token=?4").bind(payload,now,jobId,claimToken).run();
  return changes(r)===1?{status:200,state:'COMPLETE_ACCEPTED'}:{status:409,error:'JOB_STATE_CONFLICT'};
@@ -64,8 +81,10 @@ export async function handleResearchRoute(request,env,ctx){
   if(p==='/api/research'){
    let b;try{b=JSON.parse(await ctx.bodyText(request,8192)||'{}')}catch{return json({error:'INVALID_JSON'},400,uiOrigin)}
    const q=String(b?.question||'').trim();if(!q||q.length>MAX_QUESTION)return json({error:'QUESTION_INVALID'},400,uiOrigin);
-   const id='R203WEB_'+crypto.randomUUID().replace(/-/g,''),r=await enqueue(env.DB,{id,question:q});
-   return r.error?json({error:r.error},503,uiOrigin):json({jobId:id,state:'QUEUED'},202,uiOrigin);
+   const sessionHash=typeof ctx.sessionHash==='function'?await ctx.sessionHash(request):null;
+   if(sessionHash===false)return json({error:'SESSION_REQUIRED'},400,uiOrigin);
+   const id='R203WEB_'+crypto.randomUUID().replace(/-/g,''),r=await enqueue(env.DB,{id,question:q,sessionHash});
+   return r.error?json({error:r.error},r.error==='SESSION_QUEUE_BUSY'?429:503,uiOrigin):json({jobId:id,state:'QUEUED'},202,uiOrigin);
   }
   const id=u.searchParams.get('jobId');
   if([...u.searchParams.keys()].some(k=>k!=='jobId')||!jobIdOk(id))return json({error:'JOB_ID_INVALID'},400,uiOrigin);
