@@ -33,6 +33,8 @@ jobs:
         run: node --test tests/topic-evidence-boundary.test.cjs
       - name: Test public Q&A provider-to-guard contract
         run: node --test tests/public-qa-contract.test.cjs
+      - name: Test worker claim adapter contract and queued-timeout honesty
+        run: node --test tests/worker-adapter-contract.test.cjs
       - name: Verify JavaScript parses
         run: |
           node --check tens-business-capabilities.js
