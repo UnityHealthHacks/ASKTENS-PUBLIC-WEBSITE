@@ -31,6 +31,8 @@ jobs:
         run: node --check tens-topic-evidence-boundary.js
       - name: Test source-backed topic dossier fail-closed behavior
         run: node --test tests/topic-evidence-boundary.test.cjs
+      - name: Test public Q&A provider-to-guard contract
+        run: node --test tests/public-qa-contract.test.cjs
       - name: Verify JavaScript parses
         run: |
           node --check tens-business-capabilities.js
