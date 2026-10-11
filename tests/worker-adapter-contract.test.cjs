@@ -3,6 +3,7 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const path=require('node:path'),fs=require('node:fs'),vm=require('node:vm');
+const {pathToFileURL}=require('node:url');
 const root=path.resolve(__dirname,'..');
 const {processOne}=require('../backend/adapter-contract/claim-adapter.js');
 const HASH='a'.repeat(64);
@@ -52,7 +53,7 @@ test('UNKNOWN-only result with no verified findings may complete honestly',async
 
 // Characterization of the reviewed R204 worker.mjs queue index: read-modify-write on ONE KV key.
 test('KNOWN DEFECT: concurrent /api/research POSTs can lose a queue entry (job stays QUEUED forever)',async()=>{
- const mod=await import(path.join(root,'backend/cloudflare-r204-review/worker.mjs'));
+ const mod=await import(pathToFileURL(path.join(root,'backend/cloudflare-r204-review/worker.mjs')).href);
  const store=new Map();
  const kv={async get(k,t){await new Promise(r=>setImmediate(r));const v=store.get(k);return v==null?null:(t==='json'?JSON.parse(v):v)},async put(k,v){await new Promise(r=>setImmediate(r));store.set(k,String(v))}};
  const env={TENS_PUBLIC_JOBS:kv};
