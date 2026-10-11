@@ -21,16 +21,17 @@ header{position:sticky;top:0;z-index:20;border-bottom:1px solid rgba(150,200,236
 <body>
 <header><div class="wrap"><div class="top"><a class="brand" href="index.html"><span class="mark" aria-hidden="true"></span><strong>TENS</strong></a><nav class="nav"><a href="browse.html">← Back</a><a href="index.html">Ask TENS</a><a href="business.html">For business</a></nav></div></div></header>
 <main class="wrap">
-<section class="hero reveal"><p class="eyebrow">Living popular-link evidence page · R210</p><h1 id="title">TENS subject</h1><p id="intro"></p><div class="statusline"><span class="pill good">R210 live evidence</span><span class="pill" id="updated">Loading current record…</span><span class="pill">Facts first · assumptions never</span></div></section>
+<section class="hero reveal"><p class="eyebrow">Living subject dossier · source verification required</p><h1 id="title">TENS subject</h1><p id="intro"></p><div class="statusline"><span class="pill">Source verification required</span><span class="pill" id="updated">Loading current record…</span><span class="pill">Facts first · assumptions never</span></div></section>
 <section class="summary reveal"><h2>Where the record stands now</h2><div class="answer" id="summaryAnswer">TENS is checking the current admitted evidence…</div><ul class="highlights" id="highlights"></ul><div class="meta" id="summaryMeta"></div></section>
 <section class="grid" id="lanes"></section>
 <section class="recordsBox reveal"><h2>Evidence files & records</h2><div class="meta">These are the public-safe source records returned across the current subject summaries. Archived copies show their preserved SHA-256 trail.</div><div class="records" id="records"><div class="loading">Evidence files will appear as the summaries finish.</div></div></section>
 <section class="unknownBox reveal" style="margin-top:18px"><h2>What is still unresolved</h2><div class="unknownList" id="unknowns"><div class="loading">Open questions and evidence limits will appear here.</div></div></section>
 <section class="research reveal"><h2>Ask another question</h2><div class="meta" style="margin:0 0 10px">Ask TENS a deeper question about this subject or anything else.</div><form id="askForm" class="askrow"><input id="ask" placeholder="Ask TENS about this subject…" autocomplete="off"><button type="submit">Ask TENS →</button></form></section>
-<div class="truth reveal"><strong>TENS truth boundary:</strong> This page refreshes from the evidence currently admitted to the local R210 public-safe research path. A missing result is not proof that no record exists. Direct statements remain traceable to their supporting records, and unresolved points remain labeled unresolved.</div>
+<div class="truth reveal"><strong>TENS truth boundary:</strong> This page requests source-linked evidence from the configured public API. A website response alone is not independent proof of source authenticity. A missing result is not proof that no record exists. Direct statements remain traceable to their supporting records, and unresolved points remain labeled unresolved.</div>
 </main>
 <div class="wrap footer">Facts first. Transparency always. Assumptions never.</div>
 <script src="tens-api-config.js"></script>
+<script src="tens-topic-evidence-boundary.js"></script>
 <script>
 (()=>{
 const cfgs={
@@ -79,14 +80,14 @@ const id=new URLSearchParams(location.search).get('id')||'blackburn',cfg=cfgs[id
 document.title=cfg.title+' — TENS Living Evidence';document.getElementById('title').textContent=cfg.title;document.getElementById('intro').textContent=cfg.intro;
 const lanesEl=document.getElementById('lanes'),recordsEl=document.getElementById('records'),unknownEl=document.getElementById('unknowns'),summary=document.getElementById('summaryAnswer'),highlights=document.getElementById('highlights'),meta=document.getElementById('summaryMeta'),updated=document.getElementById('updated');
 const sourceMap=new Map(),unknownMap=new Map();
-cfg.lanes.forEach(([name,q],i)=>{const el=document.createElement('article');el.className='card reveal';el.id='lane'+i;el.innerHTML='<h2>'+escapeHtml(name)+'</h2><div class="sub">'+escapeHtml(q)+'</div><div class="loading">TENS is checking the current R210 evidence…</div>';lanesEl.appendChild(el)});
+cfg.lanes.forEach(([name,q],i)=>{const el=document.createElement('article');el.className='card reveal';el.id='lane'+i;el.innerHTML='<h2>'+escapeHtml(name)+'</h2><div class="sub">'+escapeHtml(q)+'</div><div class="loading">TENS is checking source-linked evidence…</div>';lanesEl.appendChild(el)});
 function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function reveal(el){requestAnimationFrame(()=>el.classList.add('on'))}
 [...document.querySelectorAll('.reveal')].forEach((el,i)=>setTimeout(()=>reveal(el),100+i*70));
 async function research(question){
  const start=await window.TENS_API.fetch('/api/research',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question})});
  if(start.status!==202)throw new Error('QUEUE_'+start.status);const j=await start.json();
- for(let i=0;i<240;i++){await new Promise(r=>setTimeout(r,i<8?350:600));const r=await window.TENS_API.fetch('/api/research/status?jobId='+encodeURIComponent(j.jobId));const x=await r.json();if(x.state==='COMPLETE')return x.result;if(x.state==='FAILED')throw new Error(x.errorCode||'RESEARCH_FAILED')}
+ for(let i=0;i<240;i++){await new Promise(r=>setTimeout(r,i<8?350:600));const r=await window.TENS_API.fetch('/api/research/status?jobId='+encodeURIComponent(j.jobId));const x=await r.json();if(x.state==='COMPLETE'){const check=window.TENS_TOPIC_EVIDENCE_BOUNDARY?.validate(x.result);if(!check?.valid)throw new Error('SOURCE_BOUNDARY_HOLD');return check.result;}if(x.state==='FAILED')throw new Error(x.errorCode||'RESEARCH_FAILED')}
  throw new Error('RESEARCH_TIMEOUT')
 }
 function collect(r){for(const s of r.sources||[])sourceMap.set(s.evidenceId,s);for(const u of r.unknowns||[])unknownMap.set((u.type||'UNKNOWN')+'|'+(u.statement||''),u)}
@@ -97,30 +98,30 @@ function laneMatches(r,q){
 }
 function laneHtml(r,q){
  const matched=laneMatches(r,q);
- const items=matched.map(v=>'<div class="item"><p>'+escapeHtml(v.statement||'Verified source statement')+'</p></div>').join('');
+ const items=matched.map(v=>{
+  const linked=(v.evidenceRefs||[]).map(ref=>sourceMap.get(ref)).filter(Boolean).map(s=>
+    s.url?'<a href="'+escapeHtml(s.url)+'" target="_blank" rel="noopener">Open source record ↗</a>':
+    '<span>Archived SHA-256 '+escapeHtml(s.contentHash)+'</span>').join(' · ');
+  return '<div class="item"><p>'+escapeHtml(v.statement||'Source-linked statement')+'</p><div class="meta">'+linked+'</div></div>';
+ }).join('');
  const answer=matched.length?('TENS verified '+matched.length+' source statement'+(matched.length===1?'':'s')+' in this subject evidence bundle relevant to this section.'):'No direct verified finding in the current subject bundle matched this section.';
  return '<div class="laneAnswer">'+escapeHtml(answer)+'</div>'+(items||'<div class="loading">This remains unresolved in the current admitted evidence bundle.</div>')
 }
 function renderRecords(){const rows=[...sourceMap.values()];recordsEl.innerHTML=rows.length?rows.map(s=>{const derived=String(s.authority||'')==='TENS_VERIFIED_DERIVED_CASE_SUMMARY',kind=derived?'Verified derived case summary':(s.recordType||s.sourceKind||'Public record'),inner='<strong>'+escapeHtml(s.label||'Evidence record')+'</strong><span>'+escapeHtml(kind)+(derived?' · derived from preserved source records':'')+(s.contentHash?' · SHA-256 '+escapeHtml(String(s.contentHash).slice(0,16))+'…':'')+'</span>';return s.url?'<a class="record" href="'+escapeHtml(s.url)+'" target="_blank" rel="noopener">'+inner+'</a>':'<div class="record">'+inner+'</div>'}).join(''):'<div class="loading">No public-safe source record has been attached yet.</div>'}
 function renderUnknowns(){const rows=[...unknownMap.values()];unknownEl.innerHTML=rows.length?rows.map(u=>'<div class="unknownItem">'+escapeHtml(u.statement||'This point remains unresolved.')+'</div>').join(''):'<div class="loading">No additional unresolved item was returned for this subject bundle.</div>'}
-function renderOverview(r){collect(r);const verified=r.verified||[];summary.textContent=r.answer==='UNKNOWN'?'TENS does not currently have enough admitted evidence to state an overview as established fact.':String(r.answer||'Current evidence loaded.');highlights.innerHTML=verified.slice(0,6).map(v=>'<li>'+escapeHtml(v.statement||'')+'</li>').join('');meta.textContent='One verified subject bundle · '+verified.length+' source statement'+(verified.length===1?'':'s')+' · '+(r.sources||[]).length+' supporting record'+((r.sources||[]).length===1?'':'s')+'.';renderRecords();renderUnknowns()}
-const snapshotKey='TENS_R210_TOPIC_BUNDLE_'+id;
-function saveSnapshot(bundle){try{localStorage.setItem(snapshotKey,JSON.stringify({version:2,id,title:cfg.title,savedAt:Date.now(),bundle}))}catch{}}
-function loadSnapshot(){try{const x=JSON.parse(localStorage.getItem(snapshotKey)||'null');if(!x||x.version!==2||x.id!==id||!x.bundle)return null;return x}catch{return null}}
+function renderOverview(r){collect(r);const verified=r.verified||[];summary.textContent=r.answer==='UNKNOWN'?'TENS does not currently have enough admitted evidence to state an overview as established fact.':String(r.answer||'Current evidence loaded.');highlights.innerHTML=verified.slice(0,6).map(v=>'<li>'+escapeHtml(v.statement||'')+'</li>').join('');meta.textContent='Source-linked candidate dossier · '+verified.length+' source statement'+(verified.length===1?'':'s')+' · '+(r.sources||[]).length+' supporting record'+((r.sources||[]).length===1?'':'s')+'.';renderRecords();renderUnknowns()}
 function renderBundle(r){
  sourceMap.clear();unknownMap.clear();renderOverview(r);
  cfg.lanes.forEach((lane,i)=>{const el=document.getElementById('lane'+i);el.innerHTML='<h2>'+escapeHtml(lane[0])+'</h2><div class="sub">'+escapeHtml(lane[1])+'</div>'+laneHtml(r,lane[1]);});
  renderRecords();renderUnknowns()
 }
-const previous=loadSnapshot();
-if(previous){renderBundle(previous.bundle);const mins=Math.round(Math.max(0,Date.now()-previous.savedAt)/60000);updated.textContent='Latest verified R210 subject bundle loaded'+(mins<2?' just now':' · '+mins+' min ago')+' · checking for newer evidence…'}
 (async()=>{
  const coverage=cfg.lanes.map(x=>x[0]+': '+x[1]).join(' ');
  const dossierQ='Build one current evidence-backed subject dossier for '+cfg.title+'. Cover these sections from the same admitted evidence bundle: '+coverage+' Include verified findings, supporting records, and unresolved gaps. Facts first; do not speculate.';
  try{
-   const r=await research(dossierQ);renderBundle(r);saveSnapshot(r);updated.textContent='Current R210 subject bundle loaded · '+new Date().toLocaleString();
+   const r=await research(dossierQ);renderBundle(r);updated.textContent='Current source-linked dossier loaded · '+new Date().toLocaleString();
  }catch(e){
-   if(!previous){summary.textContent='TENS could not complete the subject bundle safely. No unsupported summary was generated.';meta.textContent=String(e.message||e);updated.textContent='Evidence refresh held safely'}
+   summary.textContent='TENS could not complete the subject bundle safely. No unsupported summary was generated.';meta.textContent=String(e.message||e);updated.textContent='Evidence refresh held safely'
  }
 })();
 document.getElementById('askForm').addEventListener('submit',e=>{e.preventDefault();const q=document.getElementById('ask').value.trim();if(q)location.href='results.html?q='+encodeURIComponent(q)});
