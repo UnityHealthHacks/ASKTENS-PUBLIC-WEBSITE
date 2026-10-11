@@ -8,6 +8,9 @@ on:
       - 'tens-business-*.js'
       - 'tens-researched-business-capabilities.js'
       - 'tests/business-*.test.cjs'
+      - 'topic.html'
+      - 'tens-topic-evidence-boundary.js'
+      - 'tests/topic-evidence-boundary.test.cjs'
       - '.github/workflows/business-preview-checks.yml'
 
 permissions:
@@ -24,6 +27,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Verify topic dossier evidence boundary parses
+        run: node --check tens-topic-evidence-boundary.js
+      - name: Test source-backed topic dossier fail-closed behavior
+        run: node --test tests/topic-evidence-boundary.test.cjs
       - name: Verify JavaScript parses
         run: |
           node --check tens-business-capabilities.js
