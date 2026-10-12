@@ -19,12 +19,12 @@ const fromB64=s=>Uint8Array.from(atob(String(s).replace(/-/g,'+').replace(/_/g,'
 const json=(data,status=200,origin=null)=>new Response(JSON.stringify({...data,providerWrite:false,productionMutation:false}),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','vary':'Origin',...(origin?{'access-control-allow-origin':origin}:{})}});
 async function bodyText(r,max=524288){const n=Number(r.headers.get('content-length')||0);if(n>max)throw Error('BODY_TOO_LARGE');const t=await r.text();if(enc.encode(t).length>max)throw Error('BODY_TOO_LARGE');return t}
 // Same signed message as worker.mjs verifyInternal; replay protection is done by the shared D1 nonce table instead of per-isolate memory.
-export async function verifySignature(r,text,publicKey=PUBLIC_KEY){
+async function verifySignature(r,text){
  const ts=Number(r.headers.get('x-tens-timestamp')),nonce=String(r.headers.get('x-tens-nonce')||''),sig=String(r.headers.get('x-tens-signature')||'');
  if(!Number.isFinite(ts)||Math.abs(Date.now()-ts)>120000||!/^[A-Za-z0-9_-]{16,80}$/.test(nonce)||!sig)return false;
  const digest=hex(await crypto.subtle.digest('SHA-256',enc.encode(String(text))));
  const msg=enc.encode(ts+'\n'+nonce+'\n'+r.method+'\n'+new URL(r.url).pathname+'\n'+digest);
- try{const key=await crypto.subtle.importKey('jwk',publicKey,{name:'ECDSA',namedCurve:'P-256'},false,['verify']);return await crypto.subtle.verify({name:'ECDSA',hash:'SHA-256'},key,fromB64(sig),msg)}catch{return false}
+ try{const key=await crypto.subtle.importKey('jwk',PUBLIC_KEY,{name:'ECDSA',namedCurve:'P-256'},false,['verify']);return await crypto.subtle.verify({name:'ECDSA',hash:'SHA-256'},key,fromB64(sig),msg)}catch{return false}
 }
 // Browser sends a 32-hex per-tab token on POST /api/research. Only its SHA-256 is stored, to cap active jobs per tab.
 async function sessionHash(request){
