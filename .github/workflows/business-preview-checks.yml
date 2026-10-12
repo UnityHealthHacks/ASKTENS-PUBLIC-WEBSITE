@@ -39,6 +39,8 @@ jobs:
         run: node --test tests/d1-research-queue.test.cjs
       - name: Test review-only D1 worker candidate wrapper (legacy rollover, tokens, sessions)
         run: node --test tests/worker-d1-candidate.test.cjs
+      - name: Test review-only source-backed result builder (fail-closed, attestation required)
+        run: node --test tests/source-backed-result-builder.test.cjs
       - name: Verify JavaScript parses
         run: |
           node --check tens-business-capabilities.js
