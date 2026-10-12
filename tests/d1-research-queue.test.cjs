@@ -49,11 +49,26 @@ test('expired claim is reclaimed, token rotates, old worker cannot complete',asy
  assert.equal((await Q.claim(db,{now:2000+Q.CLAIM_MS-1})).state,'EMPTY','not yet expired');
  const b=await Q.claim(db,{now:2000+Q.CLAIM_MS,token:'B'});assert.equal(b.state,'CLAIMED');assert.equal(b.reclaimed,true);
  assert.equal((await Q.complete(db,{jobId:id(1),claimToken:'A',result:good()})).status,409);
- assert.equal((await Q.complete(db,{jobId:id(1),claimToken:'B',result:good()})).status,200);
+ assert.equal((await Q.complete(db,{jobId:id(1),claimToken:'B',result:good(),now:2000+Q.CLAIM_MS+1})).status,200);
+});
+test('an expired lease cannot complete or fail even before another worker reclaims it',async()=>{
+ const db=d1(),base=Date.now();
+ await Q.enqueue(db,{id:id(17),question:'source check',now:base});
+ await Q.enqueue(db,{id:id(18),question:'follow-up',now:base+1});
+ const first=await Q.claim(db,{now:base+2,token:'lease17'});
+ const second=await Q.claim(db,{now:base+3,token:'lease18'});
+ assert.equal(first.jobId,id(17));assert.equal(second.jobId,id(18));
+ assert.equal((await Q.complete(db,{jobId:first.jobId,claimToken:'lease17',result:good(),now:first.claimExpiresAt})).status,409,'completion at lease boundary forbidden');
+ assert.equal((await Q.fail(db,{jobId:second.jobId,claimToken:'lease18',errorCode:'WORKER_HOLD',now:second.claimExpiresAt+1})).status,409,'failure after expired lease forbidden');
+ assert.equal((await Q.status(db,id(17))).state,'RUNNING');
+ assert.equal((await Q.status(db,id(18))).state,'RUNNING');
+ const reclaimed=await Q.claim(db,{now:Math.max(first.claimExpiresAt,second.claimExpiresAt)+2,token:'fresh'});
+ assert.equal(reclaimed.state,'CLAIMED');assert.equal(reclaimed.reclaimed,true);
+ assert.equal((await Q.complete(db,{jobId:reclaimed.jobId,claimToken:'fresh',result:good(),now:Math.max(first.claimExpiresAt,second.claimExpiresAt)+3})).status,200);
 });
 test('fail records a bounded error code and never leaves a result',async()=>{
  const db=d1();await Q.enqueue(db,{id:id(1),question:'q',now:1});const c=await Q.claim(db,{now:2,token:'T'});
- assert.equal((await Q.fail(db,{jobId:id(1),claimToken:'T',errorCode:'X'.repeat(500)})).status,200);
+ assert.equal((await Q.fail(db,{jobId:id(1),claimToken:'T',errorCode:'X'.repeat(500),now:3})).status,200);
  const s=await Q.status(db,id(1));assert.equal(s.state,'FAILED');assert.equal(s.errorCode.length,120);assert.equal(s.result,null);
 });
 test('stale unclaimed jobs expire to FAILED instead of staying QUEUED forever',async()=>{
