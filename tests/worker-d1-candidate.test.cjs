@@ -58,8 +58,11 @@ test('concurrent real handler POSTs -> distinct IDs, all independently claimable
 test('wrong, replayed, stale and cross-job claim tokens cannot finish jobs',async()=>{
  const env={TENS_D1_QUEUE:FLAG,TENS_PUBLIC_JOBS:kv(),DB:d1()};
  const a=(await (await post(env,'a',sess(1))).json()).jobId,b=(await (await post(env,'b',sess(2))).json()).jobId;
- const ca=await (await internal(env,'/internal/claim')).json(),cb=await (await internal(env,'/internal/claim')).json();
- assert.equal(ca.jobId,a);assert.equal(cb.jobId,b);
+ const first=await (await internal(env,'/internal/claim')).json(),second=await (await internal(env,'/internal/claim')).json();
+ assert.deepEqual(new Set([first.jobId,second.jobId]),new Set([a,b]),'both jobs claimed once');
+ // Jobs submitted within one millisecond tie on created_at; FIFO then orders by random job ID.
+ // Associate tokens with job identity rather than assuming submission order wins the tie.
+ const ca=first.jobId===a?first:second,cb=first.jobId===b?first:second;
  assert.equal((await internal(env,'/internal/complete',{jobId:a,claimToken:cb.claimToken,result:good()})).status,409,'other job token');
  assert.equal((await internal(env,'/internal/complete',{jobId:a,claimToken:'nope',result:good()})).status,409);
  assert.equal((await internal(env,'/internal/fail',{jobId:a})).status,409,'missing token');
