@@ -37,19 +37,19 @@ export async function claim(db,{now=Date.now(),token=crypto.randomUUID()}={}){
  if(!row)return {state:'EMPTY',retryAfterMs:5000};
  return {state:'CLAIMED',jobId:row.id,question:row.question,claimToken:row.claim_token,claimExpiresAt:row.claim_expires_at,reclaimed:Number(row.claim_count)>1};
 }
-// Token is rotated on every (re)claim, so an expired worker's token can no longer complete after reclaim.
+// A lease must still be valid at commit time, even if no other worker has reclaimed it. A reclaimed job also rotates its token.
 export async function complete(db,{jobId,claimToken,result,now=Date.now()}){
  if(!jobIdOk(jobId)||!resultOk(result))return {status:400,error:'RESULT_SCHEMA_REJECTED'};
  const payload=JSON.stringify(result);if(payload.length>MAX_RESULT_CHARS)return {status:413,error:'RESULT_TOO_LARGE'};
  const sp=sourceProblem(result);if(sp)return {status:400,error:'RESULT_NOT_SOURCE_BACKED_'+sp};
  if(typeof claimToken!=='string'||!claimToken)return {status:409,error:'JOB_STATE_CONFLICT'};
- const r=await db.prepare("UPDATE research_jobs SET state='COMPLETE',result_json=?1,error_code=NULL,claim_token=NULL,claim_expires_at=NULL,updated_at=?2 WHERE id=?3 AND state='RUNNING' AND claim_token=?4").bind(payload,now,jobId,claimToken).run();
+ const r=await db.prepare("UPDATE research_jobs SET state='COMPLETE',result_json=?1,error_code=NULL,claim_token=NULL,claim_expires_at=NULL,updated_at=?2 WHERE id=?3 AND state='RUNNING' AND claim_token=?4 AND claim_expires_at>?2").bind(payload,now,jobId,claimToken).run();
  return changes(r)===1?{status:200,state:'COMPLETE_ACCEPTED'}:{status:409,error:'JOB_STATE_CONFLICT'};
 }
 export async function fail(db,{jobId,claimToken,errorCode,now=Date.now()}){
  if(!jobIdOk(jobId))return {status:400,error:'JOB_ID_INVALID'};
  if(typeof claimToken!=='string'||!claimToken)return {status:409,error:'JOB_STATE_CONFLICT'};
- const r=await db.prepare("UPDATE research_jobs SET state='FAILED',result_json=NULL,error_code=?1,claim_token=NULL,claim_expires_at=NULL,updated_at=?2 WHERE id=?3 AND state='RUNNING' AND claim_token=?4").bind(String(errorCode||'R203_LOCAL_HOLD').slice(0,120),now,jobId,claimToken).run();
+ const r=await db.prepare("UPDATE research_jobs SET state='FAILED',result_json=NULL,error_code=?1,claim_token=NULL,claim_expires_at=NULL,updated_at=?2 WHERE id=?3 AND state='RUNNING' AND claim_token=?4 AND claim_expires_at>?2").bind(String(errorCode||'R203_LOCAL_HOLD').slice(0,120),now,jobId,claimToken).run();
  return changes(r)===1?{status:200,state:'FAILURE_ACCEPTED'}:{status:409,error:'JOB_STATE_CONFLICT'};
 }
 export async function status(db,id){
