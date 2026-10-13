@@ -67,7 +67,7 @@ test('UNKNOWN result also passes the real browser guard',async()=>{
  const v=win.TENS_EVIDENCE_GUARD.validateResult(out);assert.equal(v.valid,true,JSON.stringify(v.errors));
 });
 test('adapter hook: no bundle -> no result (job fails closed); good bundle completes via claim adapter',async()=>{
- const calls=[];const queue={claim:async()=>({state:'CLAIMED',jobId:job.jobId,question:Q,claimToken:'T'}),complete:async o=>calls.push(['complete',o]),fail:async o=>calls.push(['fail',o])};
+ const calls=[];const queue={claim:async()=>({state:'CLAIMED',jobId:job.jobId,question:Q,claimToken:'T'}),complete:async o=>{calls.push(['complete',o]);return {status:200,state:'COMPLETE_ACCEPTED'}},fail:async o=>{calls.push(['fail',o]);return {status:200,state:'FAILURE_ACCEPTED'}}};
  const base={queue,runner:{runJob:async()=>({state:'PUBLIC_RESEARCH_PASS',completionClaimAllowed:true})},activationProof:{state:'R212_PUBLIC_RESEARCH_ACTIVATION_PROOF_READY'},namespace:{}};
  assert.equal((await processOne({...base,buildResult:B.asAdapterBuilder(()=>null)})).state,'FAILED_REPORTED');assert.equal(calls[0][1].errorCode,'NO_SOURCE_BACKED_RESULT');
  assert.equal((await processOne({...base,buildResult:B.asAdapterBuilder(()=>({sources:[src()],findings:[fnd()]}))})).state,'COMPLETED');assert.equal(calls[1][0],'complete');
