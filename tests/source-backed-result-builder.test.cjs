@@ -72,3 +72,25 @@ test('adapter hook: no bundle -> no result (job fails closed); good bundle compl
  assert.equal((await processOne({...base,buildResult:B.asAdapterBuilder(()=>null)})).state,'FAILED_REPORTED');assert.equal(calls[0][1].errorCode,'NO_SOURCE_BACKED_RESULT');
  assert.equal((await processOne({...base,buildResult:B.asAdapterBuilder(()=>({sources:[src()],findings:[fnd()]}))})).state,'COMPLETED');assert.equal(calls[1][0],'complete');
 });
+
+test('numeric grounding refuses substring amounts and years but preserves exact numeric tokens',()=>{
+ const cases=[
+  {statement:'Allocation was $500.',quote:'Allocation was $500.',allow:true},
+  {statement:'Allocation was $12500.',quote:'Allocation was $12,500.',allow:true},
+  {statement:'In 2026, allocation was $500.',quote:'In 2026, allocation was $500.',allow:true},
+  {statement:'Allocation was $500.',quote:'Allocation was $1,500.',allow:false},
+  {statement:'Allocation was $50.',quote:'Allocation was $150.',allow:false},
+  {statement:'Agency reported year 2026.',quote:'Agency reported year 12026.',allow:false},
+  {statement:'Allocation was 1.5 million.',quote:'Allocation was 11.5 million.',allow:false},
+  {statement:'In 2026, allocation was $500.',quote:'In 2026, allocation was $1,500.',allow:false},
+  {statement:'Event was in 2026.',quote:'Event was in 20260.',allow:false},
+  {statement:'Event was in 2023.',quote:'Event was in 2024.',allow:false}
+ ];
+ for(const c of cases){
+  const r=run([src()],[fnd({statement:c.statement,directQuote:c.quote})]);
+  assert.equal(r.ok,true,c.statement+' | '+c.quote);
+  assert.equal(r.result.answer,c.allow?'VERIFIED':'UNKNOWN',c.statement+' | '+c.quote);
+  assert.equal(r.result.verified.length,c.allow?1:0,c.statement+' | '+c.quote);
+  if(!c.allow)assert.ok(r.dropped.some(x=>x.reason==='FINDING_NUMBER_NOT_IN_QUOTE'),c.statement+' | '+c.quote);
+ }
+});
