@@ -42,6 +42,20 @@ test('source-backed answer is VALIDATED with a reachable public source link',asy
  assert.equal(calls[0].url,'https://api.asktens.com/api/research');assert.equal(calls[0].method,'POST');
  assert.match(calls[1].url,/^https:\/\/api\.asktens\.com\/api\/research\/status\?jobId=JOB1$/);
 });
+test('VERIFIED is a status marker, not the displayed answer; use the preserved, cited finding text',async()=>{
+ const {result}=await ask(completeState({answer:'VERIFIED'}));
+ assert.equal(result.tensState,'VALIDATED');
+ assert.equal(result.verified.length,1);
+ assert.match(result.plainAnswer,/permit record is on file/i);
+ assert.notEqual(result.plainAnswer,'VERIFIED');
+ assert.deepEqual(result.verified[0].sourceIds,result.sources.map(s=>s.id));
+});
+test('VERIFIED marker without an admitted source cannot appear as a successful answer',async()=>{
+ const {result}=await ask(completeState({answer:'VERIFIED',sources:[]}));
+ assert.equal(result.tensState,'REJECTED');
+ assert.equal(result.verified.length,0);
+ assert.notEqual(result.plainAnswer,'VERIFIED');
+});
 test('no-match is reported as UNKNOWN, never as a finding',async()=>{
  const {result}=await ask(completeState({answer:'UNKNOWN',verified:[],sources:[],unknowns:[{type:'NO_ADMISSIBLE_EVIDENCE',statement:'x',reason:'NO_INDEX_MATCH'}]}));
  assert.equal(result.verified.length,0);assert.equal(result.unknown.length,1);

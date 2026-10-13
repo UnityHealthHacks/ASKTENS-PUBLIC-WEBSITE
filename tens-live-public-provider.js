@@ -132,6 +132,12 @@ function transform(x,language='en',query=''){
  const limited=unknown.length>0;
  let answer;
  if(result.answer==='UNKNOWN')answer=lang==='es'?'TENS no pudo verificar una respuesta con la evidencia admitida para esta investigación.':'TENS could not verify an answer from the evidence admitted for this assignment.';
+ // "VERIFIED" is a machine status marker, never a human-readable answer.
+ // Only a finding with an admitted source may supply the displayed answer text.
+ else if(result.answer==='VERIFIED'){
+  const cited=verified.find(v=>v.sourceIds.length&&String(v.text||'').trim());
+  answer=cited?.text||(lang==='es'?'TENS no pudo verificar una respuesta con la evidencia admitida para esta investigación.':'TENS could not verify an answer from the evidence admitted for this assignment.');
+ }
  else if(lang==='es')answer=verified[0]?.text?.replace(/\s+—\s+Declaración directa de evidencia preservada\.$/,'')||(verified.length===1?'TENS encontró 1 hallazgo verificado relevante para esta pregunta.':`TENS encontró ${verified.length} hallazgos verificados relevantes para esta pregunta.`);
  else answer=answerText(result.answer);
  const proposal=result.prrProposal&&result.prrProposal.state==='AWAITING_HUMAN_APPROVAL'&&result.prrProposal.providerWrite===false&&result.prrProposal.automaticRelease===false&&result.prrProposal.humanApprovalRequired===true?result.prrProposal:null;
