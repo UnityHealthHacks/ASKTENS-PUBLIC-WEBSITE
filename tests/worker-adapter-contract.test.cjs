@@ -109,3 +109,33 @@ test('unknown failure report transport exception cannot become FAILED_REPORTED',
  assert.equal(actual.state,'FAILURE_UNCONFIRMED');assert.equal(calls,1);
  assert.equal([...x.q.rows.values()][0].state,'RUNNING');
 });
+
+test('queue claim transport error cannot mean idle or start worker',async()=>{
+ const m=mk();let calls=0;
+ m.d.queue.claim=async()=>{calls++;throw Error('timeout')};
+ const v=await processOne(m.d);
+ assert.equal(v.state,'CLAIM_UNCONFIRMED');assert.equal(calls,1);
+ assert.equal([...m.q.rows.values()][0].state,'QUEUED');
+});
+test('queue empty acknowledgment is genuinely idle',async()=>{
+ const m=mk();m.d.queue.claim=async()=>({state:'EMPTY',status:200});
+ assert.equal((await processOne(m.d)).state,'IDLE');
+});
+test('claim error replies cannot become IDLE even when transport resolves',async()=>{
+ for(const reply of [undefined,null,{status:503,error:'QUEUE_STORE_NOT_READY'},{state:'ERROR'},{state:'EMPTY',status:503},{state:'CLAIMED',status:503,jobId:'R203WEB_'+'a'.repeat(32),claimToken:'T',question:'q'}]){
+  const m=mk();let completed=false;m.d.queue.claim=async()=>reply;
+  m.d.queue.complete=async()=>{completed=true;throw Error('unexpected complete')};
+  const v=await processOne(m.d);
+  assert.equal(v.state,'CLAIM_UNCONFIRMED',JSON.stringify(reply));
+  assert.equal(completed,false);
+  assert.equal([...m.q.rows.values()][0].state,'QUEUED');
+ }
+});
+test('missing required claim fields return CLAIM_MALFORMED without worker run',async()=>{
+ for(const payload of [{state:'CLAIMED',jobId:'',question:'Q',claimToken:'T'},
+  {state:'CLAIMED',jobId:'R203WEB_'+'b'.repeat(32),question:null,claimToken:'T'},
+  {state:'CLAIMED',jobId:'R203WEB_'+'b'.repeat(32),question:'Q',claimToken:9}]){
+  const m=mk();m.d.queue.claim=async()=>payload;
+  const v=await processOne(m.d);assert.equal(v.state,'CLAIM_MALFORMED');
+ }
+});
