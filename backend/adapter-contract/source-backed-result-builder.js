@@ -11,7 +11,7 @@ const text=v=>typeof v==='string'?v.trim():'';
 const normQ=q=>text(q).toLowerCase().replace(/\s+/g,' ');
 const HEX64=/^[a-f0-9]{64}$/i,ID=/^[A-Za-z0-9][A-Za-z0-9._:-]{2,120}$/;
 const UNKNOWN_REASONS=new Set(['NOT_ESTABLISHED','NO_INDEX_MATCH','SOURCE_UNAVAILABLE','PROVENANCE_UNRESOLVED','CONFLICTING_EVIDENCE','SCOPE_LIMITATION']);
-function publicHttps(u){try{const x=new URL(u);const h=x.hostname.toLowerCase();return x.protocol==='https:'&&!x.username&&!x.password&&!x.hash&&h!=='localhost'&&!h.endsWith('.local')&&!/^(\d+\.){3}\d+$/.test(h)&&!h.startsWith('[')}catch{return false}}
+function publicHttps(u){try{const x=new URL(u);const h=x.hostname.toLowerCase().replace(/\.+$/,'');return x.protocol==='https:'&&!x.username&&!x.password&&!x.hash&&h.includes('.')&&h!=='localhost'&&!/\.(localhost|local|internal|lan|home|corp|test|invalid)$/.test(h)&&!/^(\d+\.){3}\d+$/.test(h)&&!h.startsWith('[')}catch{return false}}
 
 /** Why a source record is not admissible, or '' if it carries every explicit attestation. */
 function sourceProblem(s){

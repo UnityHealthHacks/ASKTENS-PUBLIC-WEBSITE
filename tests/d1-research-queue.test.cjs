@@ -119,6 +119,7 @@ test('all cited sources require hash, unique identity, supported source type and
    [{...clean,url:'https://127.0.0.1/record'},'SOURCE_NOT_PUBLIC'],
    [{...clean,url:'https://[::1]/record'},'SOURCE_NOT_PUBLIC'],
    [{...clean,url:'https://example.gov/record#section'},'SOURCE_NOT_PUBLIC'],
+   ...['https://localhost./record','https://app.localhost/record','https://printer/record','https://db.internal/record','https://example.local./record'].map(url=>[{...clean,url},'SOURCE_NOT_PUBLIC']),
    [{...clean,sourceKind:'PERSONAL_DRIVE'},'SOURCE_KIND_INVALID'],
    [{...clean,contentHash:'b'.repeat(64),sourceKind:'ARCHIVED_PUBLIC_RECORD',url:'https://example.gov@attacker.example/x'},'SOURCE_URL_UNSAFE']
  ];

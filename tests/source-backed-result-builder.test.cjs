@@ -19,7 +19,7 @@ test('fully attested bundle -> exact R202 result, cited, hashed, no claim beyond
  assert.deepEqual(run().result,x,'deterministic');
 });
 test('every missing attestation drops the source and its findings (fail closed to UNKNOWN)',()=>{
- const cases={readStatus:{readStatus:'PARTIAL'},hash:{contentHash:'abc'},pres:{preservation:{verified:true,independent:false,verifier:'v',contentHashMatchesPreservedBytes:true}},presNoMatch:{preservation:{verified:true,independent:true,verifier:'v'}},presNone:{preservation:undefined},public:{publicAccess:undefined},kind:{sourceKind:'PRIVATE'},http:{url:'http://example.gov/a'},localhost:{url:'https://localhost/a'},creds:{url:'******example.gov/a'},ip:{url:'https://10.0.0.1/a'}};
+ const cases={readStatus:{readStatus:'PARTIAL'},hash:{contentHash:'abc'},pres:{preservation:{verified:true,independent:false,verifier:'v',contentHashMatchesPreservedBytes:true}},presNoMatch:{preservation:{verified:true,independent:true,verifier:'v'}},presNone:{preservation:undefined},public:{publicAccess:undefined},kind:{sourceKind:'PRIVATE'},http:{url:'http://example.gov/a'},localhost:{url:'https://localhost/a'},localhostDot:{url:'https://localhost./a'},subLocalhost:{url:'https://app.localhost/a'},bareHost:{url:'https://printer/a'},internal:{url:'https://db.internal/a'},creds:{url:'******example.gov/a'},ip:{url:'https://10.0.0.1/a'}};
  for(const [k,o] of Object.entries(cases)){const r=run([src(o)]);assert.equal(r.ok,true,k);assert.equal(r.result.answer,'UNKNOWN',k);assert.equal(r.result.verified.length,0,k);assert.equal(r.result.sources.length,0,k);assert.ok(r.dropped.length>=1,k)}
 });
 test('a URL alone never makes a source valid',()=>{

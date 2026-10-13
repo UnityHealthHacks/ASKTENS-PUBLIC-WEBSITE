@@ -10,9 +10,9 @@ const HEX64=/^[a-f0-9]{64}$/i, EVIDENCE_ID=/^[A-Za-z0-9][A-Za-z0-9._:-]{2,120}$/
 function safeHttpsSourceUrl(raw){
  if(typeof raw!=='string')return false;
  try{
-  const u=new URL(raw),h=u.hostname.toLowerCase();
+  const u=new URL(raw),h=u.hostname.toLowerCase().replace(/\.+$/,'');
   return u.protocol==='https:'&&!u.username&&!u.password&&!u.hash&&
-   !!h&&h!=='localhost'&&!h.endsWith('.local')&&
+   h.includes('.')&&h!=='localhost'&&!/\.(localhost|local|internal|lan|home|corp|test|invalid)$/.test(h)&&
    !/^(\d+\.){3}\d+$/.test(h)&&!h.startsWith('[');
  }catch{return false}
 }
