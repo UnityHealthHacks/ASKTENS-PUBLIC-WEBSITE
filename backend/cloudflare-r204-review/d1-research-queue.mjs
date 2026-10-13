@@ -5,17 +5,34 @@
 export const MAX_ACTIVE=50,TTL_MS=86400000,CLAIM_MS=600000,MAX_QUESTION=1200,MAX_RESULT_CHARS=500000,NONCE_MS=300000;
 export const jobIdOk=x=>/^R20[23]WEB_[A-Za-z0-9_-]{20,80}$/.test(String(x||''));
 export function resultOk(x){return !!x&&x.protocol==='TENS_R202_PUBLIC_RESULT_1'&&x.state==='COMPLETE'&&x.providerWrite===false&&x.productionMutation===false&&typeof x.assignmentId==='string'&&typeof x.checkpointHash==='string'&&Array.isArray(x.verified)&&Array.isArray(x.unknowns)&&Array.isArray(x.sources)}
-// Server-side mirror of the browser evidence guard: every verified finding must cite a preserved public source.
+// Offline candidate guard. Structural attestations are NOT independent proof of source custody.
+const HEX64=/^[a-f0-9]{64}$/i, EVIDENCE_ID=/^[A-Za-z0-9][A-Za-z0-9._:-]{2,120}$/;
+function safeHttpsSourceUrl(raw){
+ if(typeof raw!=='string')return false;
+ try{
+  const u=new URL(raw),h=u.hostname.toLowerCase();
+  return u.protocol==='https:'&&!u.username&&!u.password&&!u.hash&&
+   !!h&&h!=='localhost'&&!h.endsWith('.local')&&
+   !/^(\d+\.){3}\d+$/.test(h)&&!h.startsWith('[');
+ }catch{return false}
+}
+// Every cited public source must have a complete content hash, distinct ID, and safe URL syntax.
+// This cannot establish true public accessibility, original-byte custody or the truth of a finding.
 export function sourceProblem(r){
- const ids=new Map();
+ if(!r||!Array.isArray(r.sources)||!Array.isArray(r.verified))return 'RESULT_MALFORMED';
+ const ids=new Set();
  for(const x of r.sources){
-  if(!x||typeof x.evidenceId!=='string'||x.preservationVerified!==true)return 'SOURCE_NOT_PRESERVED';
-  const archived=x.sourceKind==='ARCHIVED_PUBLIC_RECORD';
-  if(!archived&&!/^https:\/\//.test(String(x.url||'')))return 'SOURCE_NOT_PUBLIC';
-  if(archived&&!/^[a-f0-9]{64}$/i.test(String(x.contentHash||'')))return 'SOURCE_HASH_MISSING';
-  ids.set(x.evidenceId,x);
+  if(!x||!EVIDENCE_ID.test(String(x.evidenceId||''))||x.preservationVerified!==true)return 'SOURCE_NOT_PRESERVED';
+  if(ids.has(x.evidenceId))return 'SOURCE_DUPLICATE';
+  if(!HEX64.test(String(x.contentHash||'')))return 'SOURCE_HASH_MISSING';
+  if(x.sourceKind!=='PUBLIC_WEB'&&x.sourceKind!=='ARCHIVED_PUBLIC_RECORD')return 'SOURCE_KIND_INVALID';
+  if(x.sourceKind==='PUBLIC_WEB'&&!safeHttpsSourceUrl(x.url))return 'SOURCE_NOT_PUBLIC';
+  if(x.url!==undefined&&x.url!==null&&!safeHttpsSourceUrl(x.url))return 'SOURCE_URL_UNSAFE';
+  ids.add(x.evidenceId);
  }
- for(const v of r.verified){if(!Array.isArray(v?.evidenceRefs)||!v.evidenceRefs.length||!v.evidenceRefs.every(i=>ids.has(i)))return 'VERIFIED_UNCITED'}
+ for(const v of r.verified){
+  if(!Array.isArray(v?.evidenceRefs)||!v.evidenceRefs.length||!v.evidenceRefs.every(i=>ids.has(i)))return 'VERIFIED_UNCITED';
+ }
  return '';
 }
 const changes=r=>Number(r?.meta?.changes??r?.changes??0);
