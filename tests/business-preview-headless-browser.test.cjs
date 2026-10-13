@@ -7,6 +7,13 @@ const http=require('node:http'),{spawn}=require('node:child_process');
 const root=path.resolve(__dirname,'..'),profile=fs.mkdtempSync(path.join(os.tmpdir(),'asktens-ci-'));
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 let server=null,child=null,ws=null,seq=0;const pending=new Map();
+const chromeLaunchLog=[];
+let chromeSpawnError=null;
+function captureChrome(data){
+ const text=String(data).slice(-8192);
+ chromeLaunchLog.push(text);
+ while(chromeLaunchLog.join('').length>8192)chromeLaunchLog.shift();
+}
 function serve(req,res){
  try{
   const pathname=new URL(req.url,'http://localhost').pathname;
@@ -40,10 +47,28 @@ async function main(){
  const url='http://127.0.0.1:'+server.address().port+'/business.html';
  const chrome=process.env.TENS_TEST_CHROME||'/usr/bin/google-chrome';
  assert.ok(fs.existsSync(chrome),'Chrome must be preinstalled on CI image');
- child=spawn(chrome,['--headless=new','--no-sandbox','--disable-dev-shm-usage','--disable-background-networking','--disable-extensions','--disable-gpu','--no-first-run','--no-default-browser-check','--remote-debugging-port=0','--user-data-dir='+profile,'--window-size=390,844',url],{stdio:'ignore'});
+ child=spawn(chrome,['--headless=new','--no-sandbox','--disable-dev-shm-usage','--disable-background-networking','--disable-extensions','--disable-gpu','--no-first-run','--no-default-browser-check','--remote-debugging-port=0','--user-data-dir='+profile,'--window-size=390,844',url],{stdio:['ignore','pipe','pipe']});
+ child.on('error',e=>{chromeSpawnError=e?.code||e?.message||'CHROME_SPAWN_ERROR'});
+ child.stderr.on('data',captureChrome);
+ child.stdout.on('data',captureChrome);
  const f=path.join(profile,'DevToolsActivePort');let port=null;
- for(let i=0;i<80;i++){if(fs.existsSync(f)){const t=fs.readFileSync(f,'utf8').split(/\r?\n/)[0];if(/^\d+$/.test(t)){port=Number(t);break}}if(child.exitCode!==null)throw Error('CHROME_EXIT_'+child.exitCode);await sleep(100)}
- assert.ok(port,'Chrome debugging port unavailable');
+ // Bounded cold-start tolerance for GitHub-hosted runners. Port 0 avoids races.
+ const launchDeadline=Date.now()+(process.env.CI?30000:20000);
+ while(Date.now()<launchDeadline){
+  if(fs.existsSync(f)){
+   try{const t=fs.readFileSync(f,'utf8').split(/\r?\n/)[0];if(/^\d+$/.test(t)){port=Number(t);break}}catch{}
+  }
+  // Chrome can advertise the port on stderr before DevToolsActivePort is flushed.
+  const m=chromeLaunchLog.join('').match(/DevTools listening on ws:\/\/(?:127\.0\.0\.1|localhost):(\d+)\//);
+  if(m){port=Number(m[1]);break}
+  if(chromeSpawnError||child.exitCode!==null||child.signalCode!==null)break;
+  await sleep(125);
+ }
+ if(!port)throw Error('CHROME_DEBUG_PORT_UNAVAILABLE '+JSON.stringify({
+  exitCode:child.exitCode,signal:child.signalCode,spawnError:chromeSpawnError,
+  portFileExists:fs.existsSync(f),lastChromeOutput:chromeLaunchLog.join('').slice(-4000)
+ }));
+ assert.ok(Number.isInteger(port)&&port>0&&port<65536,'Invalid Chrome debugging port');
  let tab=null;
  for(let i=0;i<50;i++){try{const list=await (await fetch('http://127.0.0.1:'+port+'/json/list')).json();tab=list.find(x=>x.type==='page'&&x.url.startsWith(url));if(tab)break}catch{}await sleep(100)}
  assert.ok(tab?.webSocketDebuggerUrl,'Browser tab unavailable');
