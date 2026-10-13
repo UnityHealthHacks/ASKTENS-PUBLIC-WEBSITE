@@ -101,3 +101,53 @@ test('route handler: public contract preserved; internal needs signature AND fre
  assert.equal((await pub('/api/research/status?jobId=bad')).status,400);
  assert.equal((await Q.handleResearchRoute(new Request('https://api.asktens.com/api/research/status?jobId='+jobId,{headers:{origin:UI}}),{},ctx)).status,503);
 });
+
+
+test('all cited sources require hash, unique identity, supported source type and safe HTTPS syntax',async()=>{
+ const clean={evidenceId:'DOC_001',preservationVerified:true,sourceKind:'PUBLIC_WEB',url:'https://example.gov/record',contentHash:'a'.repeat(64)};
+ const archived={...clean,sourceKind:'ARCHIVED_PUBLIC_RECORD',url:undefined};
+ const base=()=>({...good(),verified:[{statement:'Direct source finding',evidenceRefs:['DOC_001']}],sources:[clean]});
+ assert.equal(Q.sourceProblem(base()),'','valid HTTPS original');
+ assert.equal(Q.sourceProblem({...base(),sources:[archived]}),'','valid hash-bound archived source without public URL');
+ assert.equal(Q.sourceProblem(good()),'','UNKNOWN/no claims remains accepted');
+ const bad=[
+   [{...clean,contentHash:undefined},'SOURCE_HASH_MISSING'],
+   [{...clean,contentHash:'not-a-hash'},'SOURCE_HASH_MISSING'],
+   [{...clean,url:'https://example.gov@attacker.example/record'},'SOURCE_NOT_PUBLIC'],
+   [{...clean,url:'http://example.gov/record'},'SOURCE_NOT_PUBLIC'],
+   [{...clean,url:'https://localhost/record'},'SOURCE_NOT_PUBLIC'],
+   [{...clean,url:'https://127.0.0.1/record'},'SOURCE_NOT_PUBLIC'],
+   [{...clean,url:'https://[::1]/record'},'SOURCE_NOT_PUBLIC'],
+   [{...clean,url:'https://example.gov/record#section'},'SOURCE_NOT_PUBLIC'],
+   [{...clean,sourceKind:'PERSONAL_DRIVE'},'SOURCE_KIND_INVALID'],
+   [{...clean,contentHash:'b'.repeat(64),sourceKind:'ARCHIVED_PUBLIC_RECORD',url:'https://example.gov@attacker.example/x'},'SOURCE_URL_UNSAFE']
+ ];
+ for(const [source,reason] of bad){
+  const x={...base(),sources:[source]};
+  assert.equal(Q.sourceProblem(x),reason,JSON.stringify(source));
+ }
+ assert.equal(Q.sourceProblem({...base(),sources:[clean,{...clean,contentHash:'b'.repeat(64)}]}),'SOURCE_DUPLICATE');
+ assert.equal(Q.sourceProblem({...base(),verified:[{statement:'no support',evidenceRefs:['OTHER_DOC']}]}),'VERIFIED_UNCITED');
+});
+
+test('D1 completion rejects forged source envelopes atomically but accepts valid and UNKNOWN results',async()=>{
+ const goodSource={evidenceId:'DOC_001',sourceKind:'PUBLIC_WEB',url:'https://example.gov/permit',contentHash:'c'.repeat(64),preservationVerified:true};
+ const make=sources=>({...good(),verified:[{statement:'Relevant directly sourced claim',evidenceRefs:['DOC_001']}],sources});
+ const cases=[
+   {name:'missing hash',sources:[{...goodSource,contentHash:undefined}],accept:false},
+   {name:'malformed hash',sources:[{...goodSource,contentHash:'bad'}],accept:false},
+   {name:'userinfo URL',sources:[{...goodSource,url:'https://example.gov@attacker.example/permit'}],accept:false},
+   {name:'duplicate cited identity',sources:[goodSource,{...goodSource,contentHash:'d'.repeat(64)}],accept:false},
+   {name:'valid public source',sources:[goodSource],accept:true},
+   {name:'valid archived source',sources:[{...goodSource,url:undefined,sourceKind:'ARCHIVED_PUBLIC_RECORD'}],accept:true}
+ ];
+ for(let i=0;i<cases.length;i++){
+  const item=cases[i],db=d1(),jobId=id(100+i),now=10000+i;
+  await Q.enqueue(db,{id:jobId,question:'test',now});
+  const c=await Q.claim(db,{now:now+1,token:'tok'+i});
+  const r=await Q.complete(db,{jobId,claimToken:c.claimToken,result:make(item.sources),now:now+2});
+  assert.equal(r.status,item.accept?200:400,item.name);
+  const st=await Q.status(db,jobId);
+  assert.equal(st.state,item.accept?'COMPLETE':'RUNNING',item.name);
+ }
+});
