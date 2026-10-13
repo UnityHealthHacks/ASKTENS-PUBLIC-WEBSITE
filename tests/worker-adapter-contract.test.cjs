@@ -12,8 +12,8 @@ function fakeQueue(jobs){
  const log=[];const rows=new Map(jobs.map(j=>[j.id,{...j,state:'QUEUED'}]));
  return {log,rows,
   async claim(){log.push('claim');const r=[...rows.values()].find(x=>x.state==='QUEUED');if(!r)return {state:'EMPTY'};r.state='RUNNING';r.claimToken='T_'+r.id;return {state:'CLAIMED',jobId:r.id,question:r.question,claimToken:r.claimToken}},
-  async complete(o){const r=rows.get(o.jobId);assert.equal(o.claimToken,r.claimToken);r.state='COMPLETE';r.result=o.result},
-  async fail(o){const r=rows.get(o.jobId);assert.equal(o.claimToken,r.claimToken);r.state='FAILED';r.errorCode=o.errorCode}};
+  async complete(o){const r=rows.get(o.jobId);assert.equal(o.claimToken,r.claimToken);r.state='COMPLETE';r.result=o.result;return {status:200,state:'COMPLETE_ACCEPTED'}},
+  async fail(o){const r=rows.get(o.jobId);assert.equal(o.claimToken,r.claimToken);r.state='FAILED';r.errorCode=o.errorCode;return {status:200,state:'FAILURE_ACCEPTED'}}};
 }
 const passProof={state:'PUBLIC_RESEARCH_PASS',completionClaimAllowed:true};
 const goodResult=()=>({protocol:'TENS_R202_PUBLIC_RESULT_1',state:'COMPLETE',providerWrite:false,productionMutation:false,assignmentId:'ASSIGN_1',checkpointHash:'c',
@@ -77,4 +77,35 @@ test('provider reports worker unavailable instead of endless QUEUED',async()=>{
  await assert.rejects(win.TENS_PUBLIC_PROVIDER.search('q?',{emitStatus:e=>events.push(e.eventType)}),/TENS_WORKER_UNAVAILABLE/);
  assert.ok(events.includes('TENS_QUEUE_WAITING'));
  assert.ok(now-1e12<=60000,'bounded wait');
+});
+
+test('a stale/rejected complete acknowledgment never claims COMPLETED and never retries',async()=>{
+ for(const response of [{status:409,error:'JOB_STATE_CONFLICT'},{status:503,error:'QUEUE_STORE_NOT_READY'},undefined,{status:200,state:'INVALID'}]){
+  const x=mk();let calls=0;x.d.queue.complete=async()=>{calls++;return response};
+  const actual=await processOne(x.d);
+  assert.equal(actual.state,'COMPLETION_UNCONFIRMED');assert.equal(calls,1);
+  assert.equal([...x.q.rows.values()][0].state,'RUNNING');
+ }
+});
+test('unknown completion outcome from a transport exception remains unconfirmed',async()=>{
+ const x=mk();let calls=0;x.d.queue.complete=async()=>{calls++;throw Error('timeout')};
+ const actual=await processOne(x.d);
+ assert.equal(actual.state,'COMPLETION_UNCONFIRMED');assert.equal(calls,1);
+ assert.equal([...x.q.rows.values()][0].state,'RUNNING');
+});
+test('a stale/rejected failure acknowledgment is NOT called FAILED_REPORTED',async()=>{
+ for(const response of [{status:409,error:'JOB_STATE_CONFLICT'},undefined,{status:200,state:'OTHER'}]){
+  const x=mk({runner:{runJob:async()=>({state:'PUBLIC_RESEARCH_HOLD',reason:'TEST_HOLD'})}});
+  let calls=0;x.d.queue.fail=async()=>{calls++;return response};
+  const actual=await processOne(x.d);
+  assert.equal(actual.state,'FAILURE_UNCONFIRMED');assert.equal(calls,1);
+  assert.equal([...x.q.rows.values()][0].state,'RUNNING');
+ }
+});
+test('unknown failure report transport exception cannot become FAILED_REPORTED',async()=>{
+ const x=mk({runner:{runJob:async()=>({state:'PUBLIC_RESEARCH_HOLD',reason:'TEST_HOLD'})}});
+ let calls=0;x.d.queue.fail=async()=>{calls++;throw Error('timeout')};
+ const actual=await processOne(x.d);
+ assert.equal(actual.state,'FAILURE_UNCONFIRMED');assert.equal(calls,1);
+ assert.equal([...x.q.rows.values()][0].state,'RUNNING');
 });
