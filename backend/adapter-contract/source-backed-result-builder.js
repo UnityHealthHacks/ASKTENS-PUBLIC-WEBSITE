@@ -39,8 +39,11 @@ function findingProblem(f,sources,qHash){
  const rel=f.relevance;
  if(!rel||rel.state!=='RELEVANT'||rel.questionSha256!==qHash)return 'FINDING_RELEVANCE_NOT_ATTESTED';
  if(!Array.isArray(f.evidenceRefs)||!f.evidenceRefs.length||!f.evidenceRefs.every(id=>sources.has(id)))return 'FINDING_UNCITED';
- const q=f.directQuote.replace(/,/g,'');
- if(!numbersIn(f.statement).every(n=>q.includes(n)))return 'FINDING_NUMBER_NOT_IN_QUOTE'; // cheap re-check, not a substitute for the attestation
+ // Numeric grounding must compare complete tokens, not substrings:
+ // '$500' MUST NOT match a quoted '$1,500' and '2026' MUST NOT match '12026'.
+ // numbersIn() normalizes thousands separators consistently on both sides.
+ const quotedNumericTokens=new Set(numbersIn(f.directQuote));
+ if(!numbersIn(f.statement).every(n=>quotedNumericTokens.has(n)))return 'FINDING_NUMBER_NOT_IN_QUOTE'; // cheap re-check, not a substitute for independent attestation
  return '';
 }
 /**
