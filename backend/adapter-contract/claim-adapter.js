@@ -43,7 +43,14 @@ async function processOne(d){
  const c=await queue.claim();
  if(!c||c.state!=='CLAIMED')return {state:'IDLE',claimed:false};
  if(!c.jobId||!c.claimToken||!c.question)return {state:'CLAIM_MALFORMED',claimed:false};
- const fail=async code=>{await queue.fail({jobId:c.jobId,claimToken:c.claimToken,errorCode:String(code).slice(0,120)});return {state:'FAILED_REPORTED',errorCode:code,claimed:true,jobId:c.jobId}};
+ // Only a confirmed queue receipt permits a success label; timeouts/lease reclaims are uncertain.
+ const fail=async code=>{
+  let ack;
+  try{ack=await queue.fail({jobId:c.jobId,claimToken:c.claimToken,errorCode:String(code).slice(0,120)})}
+  catch{return {state:'FAILURE_UNCONFIRMED',errorCode:code,claimed:true,jobId:c.jobId}}
+  if(ack?.status!==200||ack.state!=='FAILURE_ACCEPTED')return {state:'FAILURE_UNCONFIRMED',errorCode:code,claimed:true,jobId:c.jobId};
+  return {state:'FAILED_REPORTED',errorCode:code,claimed:true,jobId:c.jobId};
+ };
  let proof;
  try{proof=await runner.runJob({jobId:c.jobId,question:c.question,namespace,activationProof})}
  catch(e){return fail('R212_RUNNER_EXCEPTION')}
@@ -53,7 +60,13 @@ async function processOne(d){
  if(!result)return fail('NO_SOURCE_BACKED_RESULT');
  const problems=sourceBackedProblems(result);
  if(problems.length)return fail('RESULT_REJECTED_'+problems[0]);
- await queue.complete({jobId:c.jobId,claimToken:c.claimToken,result});
+ let ack;
+ try{ack=await queue.complete({jobId:c.jobId,claimToken:c.claimToken,result})}
+ catch{return {state:'COMPLETION_UNCONFIRMED',claimed:true,jobId:c.jobId}}
+ // A 200 HTTP envelope AND a recorded COMPLETE_ACCEPTED body must both be present.
+ // Never mark success on 409/stale leases, 503, empty response, or network uncertainty.
+ // Do not submit a second mutation automatically: the first may have committed.
+ if(ack?.status!==200||ack.state!=='COMPLETE_ACCEPTED')return {state:'COMPLETION_UNCONFIRMED',claimed:true,jobId:c.jobId};
  return {state:'COMPLETED',claimed:true,jobId:c.jobId};
 }
 module.exports={processOne,sourceBackedProblems,resultOk,RESULT_PROTOCOL};
