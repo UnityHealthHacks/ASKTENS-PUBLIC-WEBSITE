@@ -40,9 +40,15 @@ async function processOne(d){
  const {queue,runner,buildResult,activationProof,namespace}=d||{};
  if(!queue||!runner||typeof buildResult!=='function')return {state:'UNBOUND_HOLD',reason:'ADAPTER_NOT_BOUND',claimed:false};
  if(!activationProof||activationProof.state!=='R212_PUBLIC_RESEARCH_ACTIVATION_PROOF_READY')return {state:'UNBOUND_HOLD',reason:'ACTIVATION_PROOF_REQUIRED',claimed:false};
- const c=await queue.claim();
- if(!c||c.state!=='CLAIMED')return {state:'IDLE',claimed:false};
- if(!c.jobId||!c.claimToken||!c.question)return {state:'CLAIM_MALFORMED',claimed:false};
+ let c;
+ try{c=await queue.claim()}
+ catch{return {state:'CLAIM_UNCONFIRMED',reason:'QUEUE_CLAIM_TRANSPORT_UNCERTAIN',claimed:false}}
+ // Only an explicitly accepted claim/EMPTY response means progress or idle.
+ // If the signed client supplies a status, it must be HTTP 200 even if the body says CLAIMED.
+ if(c?.status!==undefined&&c.status!==200)return {state:'CLAIM_UNCONFIRMED',reason:'QUEUE_CLAIM_HTTP_REJECTED',claimed:false};
+ if(c?.state==='EMPTY')return {state:'IDLE',claimed:false};
+ if(c?.state!=='CLAIMED')return {state:'CLAIM_UNCONFIRMED',reason:'QUEUE_CLAIM_NOT_ACKNOWLEDGED',claimed:false};
+ if(typeof c.jobId!=='string'||typeof c.claimToken!=='string'||typeof c.question!=='string'||!c.jobId||!c.claimToken||!c.question)return {state:'CLAIM_MALFORMED',claimed:false};
  // Only a confirmed queue receipt permits a success label; timeouts/lease reclaims are uncertain.
  const fail=async code=>{
   let ack;
