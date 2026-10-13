@@ -112,19 +112,19 @@ test('session separation: header required, per-session active cap, other session
 });
 test('result must be exact TENS_R202 protocol and source-backed (server mirror of evidence guard)',async()=>{
  const env={TENS_D1_QUEUE:FLAG,TENS_PUBLIC_JOBS:kv(),DB:d1()};
- const src=over=>({evidenceId:'E1',preservationVerified:true,url:'https://example.gov/r.pdf',...over});
+ const src=over=>({evidenceId:'EV1',preservationVerified:true,sourceKind:'PUBLIC_WEB',contentHash:'a'.repeat(64),url:'https://example.gov/r.pdf',...over});
  const cases=[['protocol',good({protocol:'TENS_R204_PUBLIC_RESULT_1'}),'RESULT_SCHEMA_REJECTED'],
   ['uncited',good({verified:[{evidenceRefs:['X']}],sources:[src()]}),'RESULT_NOT_SOURCE_BACKED_VERIFIED_UNCITED'],
-  ['nosrc',good({verified:[{evidenceRefs:['E1']}],sources:[]}),'RESULT_NOT_SOURCE_BACKED_VERIFIED_UNCITED'],
-  ['unpres',good({verified:[{evidenceRefs:['E1']}],sources:[src({preservationVerified:false})]}),'RESULT_NOT_SOURCE_BACKED_SOURCE_NOT_PRESERVED'],
-  ['http',good({verified:[{evidenceRefs:['E1']}],sources:[src({url:'http://x.gov/a'})]}),'RESULT_NOT_SOURCE_BACKED_SOURCE_NOT_PUBLIC']];
+  ['nosrc',good({verified:[{evidenceRefs:['EV1']}],sources:[]}),'RESULT_NOT_SOURCE_BACKED_VERIFIED_UNCITED'],
+  ['unpres',good({verified:[{evidenceRefs:['EV1']}],sources:[src({preservationVerified:false})]}),'RESULT_NOT_SOURCE_BACKED_SOURCE_NOT_PRESERVED'],
+  ['http',good({verified:[{evidenceRefs:['EV1']}],sources:[src({url:'http://x.gov/a'})]}),'RESULT_NOT_SOURCE_BACKED_SOURCE_NOT_PUBLIC']];
  for(const [name,result,code] of cases){
   const id=(await (await post(env,name,sess(20+cases.length))).json()).jobId,c=await (await internal(env,'/internal/claim')).json();
   const r=await internal(env,'/internal/complete',{jobId:c.jobId,claimToken:c.claimToken,result});assert.equal(r.status,400,name);assert.equal((await r.json()).error,code,name);
   await internal(env,'/internal/fail',{jobId:c.jobId,claimToken:c.claimToken,errorCode:'X'});
  }
  const id=(await (await post(env,'ok',sess(30))).json()).jobId,c=await (await internal(env,'/internal/claim')).json();
- assert.equal((await internal(env,'/internal/complete',{jobId:id,claimToken:c.claimToken,result:good({verified:[{evidenceRefs:['E1']}],sources:[src()]})})).status,200);
+ assert.equal((await internal(env,'/internal/complete',{jobId:id,claimToken:c.claimToken,result:good({verified:[{evidenceRefs:['EV1']}],sources:[src()]})})).status,200);
 });
 test('candidate hygiene: legacy worker.mjs verification key unchanged, candidate not wired to R212 or defaults',()=>{
  const w=fs.readFileSync(path.join(dir,'worker.mjs'),'utf8'),c=fs.readFileSync(path.join(dir,'worker-d1-candidate.mjs'),'utf8');
