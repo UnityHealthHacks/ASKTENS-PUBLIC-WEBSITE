@@ -75,6 +75,32 @@ test('a broken queue is reported FAIL, not passed (no false green)',async()=>{
  const db=d1();const orig=db.prepare;db.prepare=sql=>/SET state='COMPLETE'/.test(sql)?{bind:()=>({run:async()=>({meta:{changes:1}}),first:async()=>null,all:async()=>({results:[]})})}:orig(sql);
  const r=await H.run({mode:'mutate',db,config:await approval(),runId:RUN,now:NOW});assert.equal(r.status,'FAIL');assert.equal(r.realD1Proof,false);
 });
+test('a reused runId with previously completed fixture rows is HOLD and preserves every byte of the old row',async()=>{
+ const db=d1(),id='R203WEB_ACPT'+RUN+'00000001',original='PREEXISTING MUST PRESERVE';
+ db.raw.prepare('INSERT INTO research_jobs(id,question,state,created_at,updated_at) VALUES(?,?,?,?,?)').run(id,original,'COMPLETE',1000000000001,1000000000001);
+ const r=await H.run({mode:'mutate',db,config:await approval(),runId:RUN,now:NOW});
+ assert.equal(r.status,'HOLD');assert.ok(r.reasons.includes('EXISTING_RUN_FIXTURE_IDS_OR_NONCES_REPLAY_REFUSED'));
+ assert.equal(db.raw.prepare('SELECT question FROM research_jobs WHERE id=?').get(id).question,original);
+ assert.equal(r.realD1Proof,false);assert.equal(r.scenarios.length,0);assert.equal(r.cleanup,null);
+ const db2=d1(),nonce='acpt-'+RUN+'-nonce-1';
+ db2.raw.prepare('INSERT INTO internal_nonces(nonce,created_at) VALUES(?,?)').run(nonce,NOW);
+ const replay=await H.run({mode:'mutate',db:db2,config:await approval(),runId:RUN,now:NOW});
+ assert.equal(replay.status,'HOLD');assert.ok(db2.raw.prepare('SELECT nonce FROM internal_nonces WHERE nonce=?').get(nonce));
+});
+test('late collision after precheck never authorizes cleanup of an unconfirmed/preexisting row',async()=>{
+ const db=d1(),id='R203WEB_ACPT'+RUN+'00000001',original='LATE FOREIGN SENTINEL';
+ const orig=db.prepare.bind(db);let injected=false;
+ db.prepare=sql=>{
+  if(!injected&&sql.startsWith('INSERT INTO research_jobs')){
+   injected=true;
+   db.raw.prepare('INSERT INTO research_jobs(id,question,state,created_at,updated_at) VALUES(?,?,?,?,?)').run(id,original,'COMPLETE',1000000000001,1000000000001);
+  }
+  return orig(sql);
+ };
+ const r=await H.run({mode:'mutate',db,config:await approval(),runId:RUN,now:NOW});
+ assert.equal(injected,true);assert.equal(r.status,'FAIL');assert.equal(r.realD1Proof,false);
+ assert.equal(db.raw.prepare('SELECT question FROM research_jobs WHERE id=?').get(id).question,original);
+});
 test('harness source has no network, credentials, migration application or unscoped deletes',()=>{
  const s=fs.readFileSync(path.join(dir,'d1-acceptance-harness.mjs'),'utf8').split('\n').filter(l=>!/^\s*\/\//.test(l)).join('\n');
  assert.ok(!/fetch\(|XMLHttpRequest|WebSocket|process\.env|api[_-]?token|secret|ALTER TABLE|CREATE TABLE|DROP /i.test(s));
