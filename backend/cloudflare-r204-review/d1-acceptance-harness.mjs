@@ -74,7 +74,7 @@ async function scenarios(db,run){
   const cnt=Number((await rows(db,'SELECT COUNT(*) AS n FROM research_jobs WHERE id IN ('+ids.map(()=>'?').join(',')+')',...ids))[0].n);
   rec('concurrent_enqueue_no_lost_update',enq.every(e=>e.state==='QUEUED')&&cnt===4,{cnt});
   // parallel claim: distinct jobs, FIFO set
-  const claims=await Promise.all([0,1,2,3,4].map(i=>Q.claim(db,{now:t0+100,token:`${run}-tok-${i}`})));
+  const claims=await Promise.all([0,1,2,3,4].map(i=>Q.claim(db,{now:t0+100,token:`${run}-tok-${i}`,scopeJobIds:ids})));
   const got=claims.filter(c=>c.state==='CLAIMED');
   rec('parallel_claim_unique',got.length===4&&new Set(got.map(c=>c.jobId)).size===4&&got.every(c=>ids.includes(c.jobId)),{claimed:got.length});
   const by=Object.fromEntries(got.map(c=>[c.jobId,c]));
@@ -87,7 +87,7 @@ async function scenarios(db,run){
   // expired lease cannot complete; reclaim rotates token; old token dead (crash / reentry)
   const late=t0+100+Q.CLAIM_MS+1;
   rec('expired_lease_cannot_complete',(await Q.complete(db,{jobId:c.jobId,claimToken:c.claimToken,result:GOOD,now:late})).status===409);
-  const re=await Q.claim(db,{now:late,token:`${run}-tok-re`});
+  const re=await Q.claim(db,{now:late,token:`${run}-tok-re`,scopeJobIds:ids});
   rec('crash_reentry_reclaims_with_new_token',re.state==='CLAIMED'&&re.jobId===c.jobId&&re.claimToken!==c.claimToken&&re.reclaimed===true);
   rec('stale_token_dead_after_reentry',(await Q.complete(db,{jobId:c.jobId,claimToken:c.claimToken,result:GOOD,now:late+1})).status===409);
   rec('reentry_token_completes',(await Q.complete(db,{jobId:re.jobId,claimToken:re.claimToken,result:GOOD,now:late+2})).state==='COMPLETE_ACCEPTED');
@@ -98,8 +98,8 @@ async function scenarios(db,run){
   await Q.fail(db,{jobId:d.jobId,claimToken:d.claimToken,errorCode:'ACCEPTANCE_FIXTURE',now:t0+301});
   // nonce replay (namespaced; consumeNonce prunes only rows older than the synthetic clock)
   const n1=`acpt-${run}-nonce-1`;
-  const first=await Q.consumeNonce(db,n1,t0+400);if(first===true)nonces.push(n1);
-  const second=await Q.consumeNonce(db,n1,t0+401);
+  const first=await Q.consumeNonce(db,n1,t0+400,{pruneExpired:false});if(first===true)nonces.push(n1);
+  const second=await Q.consumeNonce(db,n1,t0+401,{pruneExpired:false});
   rec('nonce_replay_rejected',first===true&&second===false);
   // SQL rollback: D1 batch is atomic; a PK conflict in statement 2 must leave statement 1 unwritten
   const rb=ID(run,90),rb2=ID(run,91); // expected rollback rows are NOT cleanup-owned: never delete on a failed transaction
