@@ -43,9 +43,29 @@ export function checkReport(r,mode){
  if(r.protocol!=='TENS_D1_ACCEPTANCE_REPORT_1')p.push('REPORT_PROTOCOL_UNEXPECTED');
  if(r.realD1Proof!==false)p.push('REPORT_CLAIMS_OR_OMITS_REAL_PROOF_FLAG');
  if(r.mode!==undefined&&r.mode!==mode)p.push('REPORT_MODE_MISMATCH');
- if(/^PASS/.test(String(r.status)))p.push('REPORT_CLAIMS_PASS');
+ // HTTP success is not permission to turn HOLD/REFUSED/FAIL into a green audit.
+ if(r.status!=='NOT_RUN_NO_REAL_D1_PROOF')p.push('REPORT_STATUS_NOT_SAFE_NONPROOF');
  if(r.production===true||r.network===true||r.migrationsApplied===true||r.otherTablesTouched===true||r.mutation===true)p.push('REPORT_CLAIMS_FORBIDDEN_EFFECT');
  if(Array.isArray(r.scenarios)&&r.scenarios.length)p.push('REPORT_CONTAINS_MUTATION_SCENARIOS');
+ const expectedReason=mode==='readonly'?'READ_ONLY_CLASSIFICATION_ONLY':'PREFLIGHT_ONLY_NO_BINDING_ACCESSED';
+ if(!Array.isArray(r.reasons)||r.reasons.length!==1||r.reasons[0]!==expectedReason)p.push('REPORT_REASONS_UNEXPECTED_FOR_MODE');
+ if(mode==='readonly'){
+  const c=r.classification;
+  if(!c||typeof c!=='object'||Array.isArray(c))p.push('READONLY_CLASSIFICATION_MISSING');
+  else{
+   if(c.marker!=='MATCHES_OWNER_APPROVAL')p.push('READONLY_MARKER_NOT_MATCHED');
+   if(!Array.isArray(c.reasons)||c.reasons.length)p.push('READONLY_CLASSIFICATION_REASONS_NOT_CLEAR');
+   if(!Array.isArray(c.missingColumns)||c.missingColumns.length)p.push('READONLY_SCHEMA_GAPS_OR_UNKNOWN');
+   if(c.foreignActiveJobs!==0)p.push('READONLY_ACTIVE_JOBS_NOT_ZERO');
+   if(!Array.isArray(c.jobColumns)||!['id','question','state','result_json','error_code','created_at','updated_at','claim_token','claim_expires_at','session_hash','claim_count'].every(x=>c.jobColumns.includes(x)))p.push('READONLY_JOB_COLUMNS_UNVERIFIED');
+   if(!Array.isArray(c.nonceColumns)||!['nonce','created_at'].every(x=>c.nonceColumns.includes(x)))p.push('READONLY_NONCE_COLUMNS_UNVERIFIED');
+  }
+ }
+ if(mode==='preflight'){
+  if(r.bindingTouched!==false)p.push('PREFLIGHT_BINDING_ACCESS_NOT_REFUTED');
+  if(!Array.isArray(r.envProblems)||r.envProblems.length)p.push('PREFLIGHT_ENVIRONMENT_PROBLEMS');
+  if(!Array.isArray(r.approvalProblems)||r.approvalProblems.length)p.push('PREFLIGHT_APPROVAL_PROBLEMS');
+ }
  return p;
 }
 
