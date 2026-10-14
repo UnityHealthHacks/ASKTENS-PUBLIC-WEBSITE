@@ -20,3 +20,12 @@ Scope: a **separate throwaway Worker** in the nonproduction account, bound only 
 
 ## Interpretation
 Every response has `realD1Proof:false`. Matching UUIDs in `env` are configuration, not proof. Real evidence is Cloudflare-side: the dashboard database id, account audit and request logs, taken by the owner. Delete the Worker after use.
+
+## Owner-local one-shot invocation (`tools/d1-acceptance-invoke.mjs`; review-only, not run)
+Purpose: call `/preflight` or `/readonly` without the token ever appearing in argv, environment, git, logs or receipts. There is no mutate path in this tool; `/mutate` stays 403.
+
+1. Write an owner config JSON outside git with: `accountId`, `observedAccountId` (read separately from the Cloudflare dashboard session, must equal `accountId`), `protectedAccountIds`, `databaseId`, `expectedDatabaseId`, `protectedDatabaseIds`, `workerName`, `workersDevSubdomain`, `consentExpiresAt` (at most 1 hour ahead) and `consent` = `INVOKE <mode> <workerName> <accountId>` for the single mode you intend.
+2. Pipe the token from your own protected store on stdin only, for example on Windows: `<your DPAPI unprotect command> | node tools/d1-acceptance-invoke.mjs --token-stdin --mode readonly --config C:\private\cfg.json --receipt new-receipt.json`. The tool never reads a token from argv or env, refuses redirects, scrubs the token from replies and errors, and writes the receipt with exclusive-create.
+3. Exit 0 means the Worker replied with an acceptable non-proof report. The receipt always says `realD1Proof:false` and `independentWitness:REQUIRED_NOT_PROVIDED`.
+
+The tool compares owner-supplied pins with each other. It cannot verify the account or database; only the Cloudflare dashboard, audit log and request logs can. A real mutation-scenario proof needs a separately reviewed adapter and an independent provider-side witness, which this change does not provide.
