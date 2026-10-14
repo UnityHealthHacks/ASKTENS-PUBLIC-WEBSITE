@@ -66,7 +66,7 @@ const GOOD={protocol:'TENS_R202_PUBLIC_RESULT_1',state:'COMPLETE',providerWrite:
 async function scenarios(db,run){
  const ids=[],nonces=[],res=[];
  const rec=(name,ok,detail)=>res.push({name,ok:!!ok,detail:detail===undefined?null:detail});
- const mk=async(n,t)=>{const id=ID(run,n);ids.push(id);return Q.enqueue(db,{id,question:'acceptance fixture '+n,now:t,maxActive:1000,perSession:1000})};
+ const mk=async(n,t)=>{const id=ID(run,n);const a=await Q.enqueue(db,{id,question:'acceptance fixture '+n,now:t,maxActive:1000,perSession:1000});if(a?.state==='QUEUED'&&a.jobId===id)ids.push(id);return a};
  const t0=BASE_TS;
  try{
   // atomic concurrent enqueue
@@ -97,11 +97,12 @@ async function scenarios(db,run){
   rec('forged_result_refused_state_unchanged',fr.status===400&&(await rows(db,'SELECT state FROM research_jobs WHERE id=?',d.jobId))[0].state==='RUNNING',fr);
   await Q.fail(db,{jobId:d.jobId,claimToken:d.claimToken,errorCode:'ACCEPTANCE_FIXTURE',now:t0+301});
   // nonce replay (namespaced; consumeNonce prunes only rows older than the synthetic clock)
-  const n1=`acpt-${run}-nonce-1`;nonces.push(n1);
-  const first=await Q.consumeNonce(db,n1,t0+400),second=await Q.consumeNonce(db,n1,t0+401);
+  const n1=`acpt-${run}-nonce-1`;
+  const first=await Q.consumeNonce(db,n1,t0+400);if(first===true)nonces.push(n1);
+  const second=await Q.consumeNonce(db,n1,t0+401);
   rec('nonce_replay_rejected',first===true&&second===false);
   // SQL rollback: D1 batch is atomic; a PK conflict in statement 2 must leave statement 1 unwritten
-  const rb=ID(run,90),rb2=ID(run,91);ids.push(rb,rb2);
+  const rb=ID(run,90),rb2=ID(run,91); // expected rollback rows are NOT cleanup-owned: never delete on a failed transaction
   let threw=false;
   try{await db.batch([db.prepare("INSERT INTO research_jobs(id,question,state,created_at,updated_at) VALUES(?,'rollback fixture','FAILED',?,?)").bind(rb,t0,t0),db.prepare("INSERT INTO research_jobs(id,question,state,created_at,updated_at) VALUES(?,'rollback fixture','FAILED',?,?)").bind(rb2,t0,t0),db.prepare("INSERT INTO research_jobs(id,question,state,created_at,updated_at) VALUES(?,'dup','FAILED',?,?)").bind(rb,t0,t0)])}catch{threw=true}
   const left=Number((await rows(db,'SELECT COUNT(*) AS n FROM research_jobs WHERE id IN (?,?)',rb,rb2))[0].n);
@@ -144,6 +145,16 @@ export async function run({mode='preflight',db=null,config=null,runId=null,now=D
  rep.classification=await classifyBinding(db,a,{now});
  if(rep.classification.reasons.length){rep.status=STATUS.HOLD;rep.reasons=rep.classification.reasons;return finish()}
  if(mode==='readonly'){rep.reasons.push('READ_ONLY_CLASSIFICATION_ONLY');return finish()}
+ // Exact existing fixture IDs/nonces are NOT disposable: refuse replay before any mutation.
+ // Separate from this precheck, scenarios tracks ONLY confirmed new enqueues for cleanup.
+ const expectedIds=[1,2,3,4,90,91].map(n=>ID(runId,n));
+ try{
+  const foundIds=await rows(db,'SELECT id FROM research_jobs WHERE id IN ('+expectedIds.map(()=>'?').join(',')+')',...expectedIds);
+  const foundNonces=await rows(db,'SELECT nonce FROM internal_nonces WHERE nonce=?',`acpt-${runId}-nonce-1`);
+  if(foundIds.length||foundNonces.length){
+   rep.status=STATUS.HOLD;rep.reasons.push('EXISTING_RUN_FIXTURE_IDS_OR_NONCES_REPLAY_REFUSED');return finish();
+  }
+ }catch(e){rep.status=STATUS.HOLD;rep.reasons.push('FIXTURE_REPLAY_CHECK_FAILED');return finish()}
  const {res,ids,nonces}=await scenarios(db,runId);
  rep.scenarios=res;rep.cleanup=await cleanup(db,ids,nonces);
  const allOk=res.length>=13&&res.every(s=>s.ok)&&!rep.cleanup.error;
