@@ -4,7 +4,7 @@
 // Staging-only execution contract: see d1-acceptance-README.md. Nothing here has been executed against Cloudflare.
 import * as Q from './d1-research-queue.mjs';
 
-export const STATUS={NOT_RUN:'NOT_RUN_NO_REAL_D1_PROOF',REFUSED:'REFUSED',HOLD:'HOLD',PASSED_UNPROVEN:'SCENARIOS_PASSED_BINDING_NOT_WITNESSED_AS_CLOUDFLARE',PASS:'PASS_REAL_D1_WITNESSED_NONPRODUCTION',FAIL:'FAIL'};
+export const STATUS={NOT_RUN:'NOT_RUN_NO_REAL_D1_PROOF',REFUSED:'REFUSED',HOLD:'HOLD',PASSED_UNPROVEN:'SCENARIOS_PASSED_BINDING_NOT_WITNESSED_AS_CLOUDFLARE',FAIL:'FAIL'};
 export const APPROVAL_SCHEMA='TENS_D1_ACCEPTANCE_APPROVAL_V1';
 export const MARKER_TABLE='tens_acceptance_marker'; // owner-created in the disposable DB: (database_id TEXT, environment TEXT, approval_nonce TEXT)
 export const NEVER_PRODUCTION_NAMES=['tens-research-jobs']; // name of the live binding reported by the owner; always refused
@@ -120,7 +120,8 @@ async function cleanup(db,ids,nonces){
  }catch(e){out.error=String(e&&e.message||e).slice(0,100)}
  return out;
 }
-const inWorkers=()=>globalThis.navigator&&globalThis.navigator.userAgent==='Cloudflare-Workers';
+// A Worker user-agent string (or a marker inside the caller-supplied DB) is not independent
+// provider/environment evidence. This module must never self-issue real D1 proof.
 
 /**
  * run({mode, db?, config?, runId?, now?})  mode: 'preflight' (default) | 'readonly' | 'mutate'
@@ -146,8 +147,11 @@ export async function run({mode='preflight',db=null,config=null,runId=null,now=D
  const {res,ids,nonces}=await scenarios(db,runId);
  rep.scenarios=res;rep.cleanup=await cleanup(db,ids,nonces);
  const allOk=res.length>=13&&res.every(s=>s.ok)&&!rep.cleanup.error;
- rep.status=!allOk?STATUS.FAIL:(inWorkers()?STATUS.PASS:STATUS.PASSED_UNPROVEN);
- rep.realD1Proof=rep.status===STATUS.PASS;
- if(rep.status===STATUS.PASSED_UNPROVEN)rep.reasons.push('NOT_RUNNING_IN_CLOUDFLARE_WORKERS_RUNTIME_SO_BINDING_NOT_WITNESSED_AS_REAL_D1');
+ // Caller-supplied approval, database marker and browser-like runtime strings cannot attest
+ // actual Cloudflare tenancy, production exclusion, original provider identity or custody.
+ // Only an independent, separately verified witness may admit real D1 evidence later.
+ rep.status=!allOk?STATUS.FAIL:STATUS.PASSED_UNPROVEN;
+ rep.realD1Proof=false;
+ if(allOk)rep.reasons.push('EXTERNAL_NONPRODUCTION_D1_ATTESTATION_NOT_ESTABLISHED');
  return finish();
 }
