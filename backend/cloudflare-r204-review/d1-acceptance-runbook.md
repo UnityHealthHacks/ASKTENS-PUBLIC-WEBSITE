@@ -13,7 +13,7 @@ Scope: a **separate throwaway Worker** in the nonproduction account, bound only 
 | `ACCEPTANCE_AUTH_SHA256` | var | SHA-256 hex of a random bearer token the owner keeps privately |
 | `ACCEPTANCE_MAX_MODE` | var | unset = preflight only; `readonly` allows `/readonly` |
 
-## Calls (all `POST`, empty body, header `Authorization: ****** private token>`)
+## Calls (all POST, empty body, with an Authorization header using the ****** and your private token)
 - `/preflight`: no D1 I/O. Returns `NOT_RUN_NO_REAL_D1_PROOF` plus configuration problems.
 - `/readonly`: SELECT/PRAGMA classification only, after every configuration check passes.
 - `/mutate`: always `403 MUTATION_DISABLED_IN_THIS_ENTRYPOINT`. Fixture mutation stays off until a separate reviewed change and an independent provider-side witness exist.
