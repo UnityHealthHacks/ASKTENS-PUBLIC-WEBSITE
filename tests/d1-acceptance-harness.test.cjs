@@ -61,11 +61,15 @@ test('authorized mutate on shim: every scenario passes, fixtures cleaned, foreig
  assert.equal(r.cleanup.error,null);assert.equal(db.raw.prepare('select count(*) c from research_jobs').get().c,1);assert.equal(db.raw.prepare('select count(*) c from internal_nonces').get().c,1);
  assert.equal(db.raw.prepare('select count(*) c from tens_acceptance_marker').get().c,1);
 });
-test('real-D1 PASS requires the Cloudflare Workers runtime signal',async()=>{
+test('forged Workers user-agent cannot promote a SQLite fixture into REAL D1 proof',async()=>{
  const had=Object.getOwnPropertyDescriptor(globalThis,'navigator');
  Object.defineProperty(globalThis,'navigator',{value:{userAgent:'Cloudflare-Workers'},configurable:true});
- try{const r=await H.run({mode:'mutate',db:d1(),config:await approval(),runId:RUN,now:NOW});assert.equal(r.status,'PASS_REAL_D1_WITNESSED_NONPRODUCTION');assert.equal(r.realD1Proof,true)}
- finally{if(had)Object.defineProperty(globalThis,'navigator',had);else delete globalThis.navigator}
+ try{
+  const r=await H.run({mode:'mutate',db:d1(),config:await approval(),runId:RUN,now:NOW});
+  assert.equal(r.status,'SCENARIOS_PASSED_BINDING_NOT_WITNESSED_AS_CLOUDFLARE');
+  assert.equal(r.realD1Proof,false);
+  assert.ok(r.reasons.includes('EXTERNAL_NONPRODUCTION_D1_ATTESTATION_NOT_ESTABLISHED'));
+ }finally{if(had)Object.defineProperty(globalThis,'navigator',had);else delete globalThis.navigator}
 });
 test('a broken queue is reported FAIL, not passed (no false green)',async()=>{
  const db=d1();const orig=db.prepare;db.prepare=sql=>/SET state='COMPLETE'/.test(sql)?{bind:()=>({run:async()=>({meta:{changes:1}}),first:async()=>null,all:async()=>({results:[]})})}:orig(sql);
