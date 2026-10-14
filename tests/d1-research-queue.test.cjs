@@ -152,3 +152,25 @@ test('D1 completion rejects forged source envelopes atomically but accepts valid
   assert.equal(st.state,item.accept?'COMPLETE':'RUNNING',item.name);
  }
 });
+
+test('scoped acceptance claim skips foreign FIFO jobs while ordinary unscoped claim stays unchanged',async()=>{
+ const db=d1();
+ await Q.enqueue(db,{id:id(1),question:'foreign older',now:1001});
+ await Q.enqueue(db,{id:id(2),question:'scoped fixture',now:1002});
+ const s=await Q.claim(db,{now:2000,token:'scope-token',scopeJobIds:[id(2)]});
+ assert.equal(s.jobId,id(2));assert.equal(db.raw.prepare('SELECT state FROM research_jobs WHERE id=?').get(id(1)).state,'QUEUED');
+ const defaultClaim=await Q.claim(db,{now:2001,token:'default-token'});
+ assert.equal(defaultClaim.jobId,id(1),'unscoped normal queue semantics remain FIFO');
+});
+test('scoped expiry never expires a different stale job; invalid scope refuses before writes',async()=>{
+ const db=d1();
+ await Q.enqueue(db,{id:id(1),question:'foreign stale',now:1000});
+ await Q.enqueue(db,{id:id(2),question:'scoped stale',now:1001});
+ const rejected=await Q.claim(db,{now:1000+Q.TTL_MS+5,token:'nope',scopeJobIds:[]});
+ assert.equal(rejected.state,'REFUSED');
+ assert.equal(db.raw.prepare('SELECT state FROM research_jobs WHERE id=?').get(id(1)).state,'QUEUED');
+ const scoped=await Q.claim(db,{now:1000+Q.TTL_MS+5,token:'valid',scopeJobIds:[id(2)]});
+ assert.equal(scoped.state,'EMPTY');
+ assert.equal(db.raw.prepare('SELECT state FROM research_jobs WHERE id=?').get(id(2)).state,'FAILED');
+ assert.equal(db.raw.prepare('SELECT state FROM research_jobs WHERE id=?').get(id(1)).state,'QUEUED');
+});
