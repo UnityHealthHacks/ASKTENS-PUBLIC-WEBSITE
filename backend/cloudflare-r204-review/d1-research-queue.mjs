@@ -44,13 +44,19 @@ export async function enqueue(db,{id,question,now=Date.now(),maxActive=MAX_ACTIV
  if(sessionHash){const c=await db.prepare("SELECT COUNT(*) AS n FROM research_jobs WHERE session_hash=?1 AND state IN ('QUEUED','RUNNING') AND created_at>?2").bind(sessionHash,now-TTL_MS).first();if(Number(c?.n)>=perSession)return {error:'SESSION_QUEUE_BUSY'}}
  return {error:'RESEARCH_QUEUE_BUSY'};
 }
-export async function expireStale(db,now=Date.now()){
- const r=await db.prepare("UPDATE research_jobs SET state='FAILED',error_code='EXPIRED_UNCLAIMED',claim_token=NULL,claim_expires_at=NULL,updated_at=?1 WHERE state IN ('QUEUED','RUNNING') AND created_at<=?2 AND (state='QUEUED' OR claim_expires_at<=?1)").bind(now,now-TTL_MS).run();
+// Optional exact-ID scope protects disposable test work from claims/expiry on foreign rows.
+const validJobScope=ids=>Array.isArray(ids)&&ids.length>0&&ids.length<=32&&
+ new Set(ids).size===ids.length&&ids.every(jobIdOk);
+const scopeClause=ids=>ids===null?'':' AND id IN ('+ids.map(()=>'?').join(',')+')';
+export async function expireStale(db,now=Date.now(),scopeJobIds=null){
+ if(scopeJobIds!==null&&!validJobScope(scopeJobIds))throw new Error('INVALID_JOB_SCOPE');
+ const r=await db.prepare("UPDATE research_jobs SET state='FAILED',error_code='EXPIRED_UNCLAIMED',claim_token=NULL,claim_expires_at=NULL,updated_at=?1 WHERE state IN ('QUEUED','RUNNING') AND created_at<=?2 AND (state='QUEUED' OR claim_expires_at<=?1)"+scopeClause(scopeJobIds)).bind(now,now-TTL_MS,...(scopeJobIds||[])).run();
  return changes(r);
 }
-export async function claim(db,{now=Date.now(),token=crypto.randomUUID()}={}){
- await expireStale(db,now);
- const row=await db.prepare("UPDATE research_jobs SET state='RUNNING',claim_token=?1,claim_expires_at=?2,claim_count=claim_count+1,updated_at=?3 WHERE id=(SELECT id FROM research_jobs WHERE (state='QUEUED' OR (state='RUNNING' AND claim_expires_at<=?3)) ORDER BY created_at ASC,id ASC LIMIT 1) AND (state='QUEUED' OR (state='RUNNING' AND claim_expires_at<=?3)) RETURNING id,question,claim_token,claim_expires_at,claim_count").bind(token,now+CLAIM_MS,now).first();
+export async function claim(db,{now=Date.now(),token=crypto.randomUUID(),scopeJobIds=null}={}){
+ if(scopeJobIds!==null&&!validJobScope(scopeJobIds))return {state:'REFUSED',error:'INVALID_JOB_SCOPE'};
+ await expireStale(db,now,scopeJobIds);
+ const row=await db.prepare("UPDATE research_jobs SET state='RUNNING',claim_token=?1,claim_expires_at=?2,claim_count=claim_count+1,updated_at=?3 WHERE id=(SELECT id FROM research_jobs WHERE (state='QUEUED' OR (state='RUNNING' AND claim_expires_at<=?3))"+scopeClause(scopeJobIds)+" ORDER BY created_at ASC,id ASC LIMIT 1) AND (state='QUEUED' OR (state='RUNNING' AND claim_expires_at<=?3)) RETURNING id,question,claim_token,claim_expires_at,claim_count").bind(token,now+CLAIM_MS,now,...(scopeJobIds||[])).first();
  if(!row)return {state:'EMPTY',retryAfterMs:5000};
  return {state:'CLAIMED',jobId:row.id,question:row.question,claimToken:row.claim_token,claimExpiresAt:row.claim_expires_at,reclaimed:Number(row.claim_count)>1};
 }
@@ -75,8 +81,9 @@ export async function status(db,id){
  return {jobId:row.id,state:row.state,result,errorCode:row.error_code||null,createdAt:row.created_at,updatedAt:row.updated_at};
 }
 // Cross-isolate replay protection (the in-memory seenNonces map in worker.mjs is per isolate only).
-export async function consumeNonce(db,nonce,now=Date.now()){
- await db.prepare('DELETE FROM internal_nonces WHERE created_at<?').bind(now-NONCE_MS).run();
+export async function consumeNonce(db,nonce,now=Date.now(),{pruneExpired=true}={}){
+ // The disposable acceptance harness must never prune unrelated historical nonces.
+ if(pruneExpired)await db.prepare('DELETE FROM internal_nonces WHERE created_at<?').bind(now-NONCE_MS).run();
  const r=await db.prepare('INSERT OR IGNORE INTO internal_nonces(nonce,created_at) VALUES(?,?)').bind(String(nonce),now).run();
  return changes(r)===1;
 }
