@@ -12,8 +12,9 @@ Modes: `preflight` (default, never touches a binding), `readonly` (SELECT/PRAGMA
 
 ## Result meaning
 - `NOT_RUN_NO_REAL_D1_PROOF`: default. Nothing proven.
-- `SCENARIOS_PASSED_BINDING_NOT_WITNESSED_AS_CLOUDFLARE`: all scenarios passed on a supplied binding, but the harness is not inside the Workers runtime, so no proof of real D1.
-- `PASS_REAL_D1_WITNESSED_NONPRODUCTION`: all scenarios passed and `navigator.userAgent==='Cloudflare-Workers'`. This is the strongest signal the code can produce itself; the owner still has to witness the Cloudflare side (database id, request logs). A bad actor with write access to the Worker could fake the runtime check, so the receipt is evidence for review, not an attestation.
+- `SCENARIOS_PASSED_BINDING_NOT_WITNESSED_AS_CLOUDFLARE`: scenarios passed on a supplied binding; this is **not** independently verified real Cloudflare D1 evidence, even when executed inside a Worker.
+- **No internal success code proves genuine Cloudflare D1 tenancy, nonproduction identity, custody or owner authorization.** Browser-like `navigator.userAgent`, a SHA-256 over caller-supplied approval fields, and a marker row in a caller-supplied database can all be reproduced by a local SQLite shim. The original `PASS_REAL_D1_WITNESSED_NONPRODUCTION` result is intentionally removed because the old guard could be spoofed in unit tests. The harness always emits `realD1Proof:false`; an independently authenticated external Cloudflare-side witness, matching account/database identity and immutable provider run logs, is required for any later acceptance decision.
+- Do not interpret the report SHA-256 or approval SHA-256 as a signature, independent owner approval, or source-byte proof.
 - `REFUSED` / `HOLD` / `FAIL` never imply any queue property.
 
 Mutating scenarios only write rows with ids `R203WEB_ACPT<runId>…` and nonces `acpt-<runId>-…`, using a synthetic clock, and delete exactly those ids afterwards. The harness refuses a database with any QUEUED/RUNNING row because `claim` is not namespaced. It does not call `expireStale` directly (claim does, with the synthetic clock). It does not change R212 admission or any source claim.
