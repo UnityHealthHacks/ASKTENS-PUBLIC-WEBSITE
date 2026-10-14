@@ -106,3 +106,31 @@ test('harness source has no network, credentials, migration application or unsco
  assert.ok(!/fetch\(|XMLHttpRequest|WebSocket|process\.env|api[_-]?token|secret|ALTER TABLE|CREATE TABLE|DROP /i.test(s));
  for(const m of s.matchAll(/DELETE FROM[^`'"]*/g))assert.match(m[0],/WHERE (id|nonce) IN/);
 });
+
+test('late foreign QUEUED job introduced after preflight is never claimed or mutated',async()=>{
+ const db=d1(),id='R203WEB_'+'a'.repeat(32);
+ const orig=db.prepare.bind(db);let injected=false;
+ db.prepare=sql=>{
+  if(!injected&&sql.startsWith("UPDATE research_jobs SET state='RUNNING'")){
+   injected=true;
+   db.raw.prepare('INSERT INTO research_jobs(id,question,state,created_at,updated_at) VALUES(?,?,?,?,?)')
+    .run(id,'FOREIGN MUST REMAIN QUEUED','QUEUED',999999999999,999999999999);
+  }
+  return orig(sql);
+ };
+ const r=await H.run({mode:'mutate',db,config:await approval(),runId:RUN,now:NOW});
+ assert.equal(injected,true);
+ const foreign=db.raw.prepare('SELECT state,question FROM research_jobs WHERE id=?').get(id);
+ assert.equal(foreign.question,'FOREIGN MUST REMAIN QUEUED');
+ assert.equal(foreign.state,'QUEUED','acceptance harness must not claim a foreign job after schema classification');
+ assert.equal(r.realD1Proof,false);
+});
+test('old foreign replay nonce remains untouched by a successful acceptance fixture',async()=>{
+ const db=d1(),nonce='foreign-old-auth-nonce';
+ db.raw.prepare('INSERT INTO internal_nonces(nonce,created_at) VALUES(?,?)').run(nonce,999999000000);
+ const r=await H.run({mode:'mutate',db,config:await approval(),runId:RUN,now:NOW});
+ assert.equal(r.status,'SCENARIOS_PASSED_BINDING_NOT_WITNESSED_AS_CLOUDFLARE');
+ assert.equal(r.realD1Proof,false);
+ assert.equal(db.raw.prepare('SELECT nonce FROM internal_nonces WHERE nonce=?').get(nonce)?.nonce,nonce,
+  'acceptance harness must not prune foreign historic replay nonces');
+});
