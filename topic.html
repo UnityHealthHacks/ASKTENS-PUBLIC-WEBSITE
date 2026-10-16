@@ -76,11 +76,13 @@ const cfgs={
 ['Brown & Caldwell','What does the record establish about Brown & Caldwell work and payments associated with 47th Street?'],
 ['North Water Tower connection','What does the record establish about the relationship or discrepancy between 47th Street payment records and North Water Tower reimbursement records?']]}
 };
-const id=new URLSearchParams(location.search).get('id')||'blackburn',cfg=cfgs[id]||cfgs.blackburn;
-document.title=cfg.title+' — TENS Living Evidence';document.getElementById('title').textContent=cfg.title;document.getElementById('intro').textContent=cfg.intro;
+const id=(new URLSearchParams(location.search).get('id')||'').trim();
+const cfg=Object.prototype.hasOwnProperty.call(cfgs,id)?cfgs[id]:null;
+const page=cfg||{title:'Subject not indexed',intro:'This address does not identify an available TENS evidence subject. Choose an existing dossier from Browse TENS Evidence or ask a specific question.',lanes:[]};
+document.title=page.title+' — TENS Living Evidence';document.getElementById('title').textContent=page.title;document.getElementById('intro').textContent=page.intro;
 const lanesEl=document.getElementById('lanes'),recordsEl=document.getElementById('records'),unknownEl=document.getElementById('unknowns'),summary=document.getElementById('summaryAnswer'),highlights=document.getElementById('highlights'),meta=document.getElementById('summaryMeta'),updated=document.getElementById('updated');
 const sourceMap=new Map(),unknownMap=new Map();
-cfg.lanes.forEach(([name,q],i)=>{const el=document.createElement('article');el.className='card reveal';el.id='lane'+i;el.innerHTML='<h2>'+escapeHtml(name)+'</h2><div class="sub">'+escapeHtml(q)+'</div><div class="loading">TENS is checking source-linked evidence…</div>';lanesEl.appendChild(el)});
+page.lanes.forEach(([name,q],i)=>{const el=document.createElement('article');el.className='card reveal';el.id='lane'+i;el.innerHTML='<h2>'+escapeHtml(name)+'</h2><div class="sub">'+escapeHtml(q)+'</div><div class="loading">TENS is checking source-linked evidence…</div>';lanesEl.appendChild(el)});
 function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function reveal(el){requestAnimationFrame(()=>el.classList.add('on'))}
 [...document.querySelectorAll('.reveal')].forEach((el,i)=>setTimeout(()=>reveal(el),100+i*70));
@@ -112,12 +114,22 @@ function renderUnknowns(){const rows=[...unknownMap.values()];unknownEl.innerHTM
 function renderOverview(r){collect(r);const verified=r.verified||[];summary.textContent=r.answer==='UNKNOWN'?'TENS does not currently have enough admitted evidence to state an overview as established fact.':String(r.answer||'Current evidence loaded.');highlights.innerHTML=verified.slice(0,6).map(v=>'<li>'+escapeHtml(v.statement||'')+'</li>').join('');meta.textContent='Source-linked candidate dossier · '+verified.length+' source statement'+(verified.length===1?'':'s')+' · '+(r.sources||[]).length+' supporting record'+((r.sources||[]).length===1?'':'s')+'.';renderRecords();renderUnknowns()}
 function renderBundle(r){
  sourceMap.clear();unknownMap.clear();renderOverview(r);
- cfg.lanes.forEach((lane,i)=>{const el=document.getElementById('lane'+i);el.innerHTML='<h2>'+escapeHtml(lane[0])+'</h2><div class="sub">'+escapeHtml(lane[1])+'</div>'+laneHtml(r,lane[1]);});
+ page.lanes.forEach((lane,i)=>{const el=document.getElementById('lane'+i);el.innerHTML='<h2>'+escapeHtml(lane[0])+'</h2><div class="sub">'+escapeHtml(lane[1])+'</div>'+laneHtml(r,lane[1]);});
  renderRecords();renderUnknowns()
 }
 (async()=>{
- const coverage=cfg.lanes.map(x=>x[0]+': '+x[1]).join(' ');
- const dossierQ='Build one current evidence-backed subject dossier for '+cfg.title+'. Cover these sections from the same admitted evidence bundle: '+coverage+' Include verified findings, supporting records, and unresolved gaps. Facts first; do not speculate.';
+ if(!cfg){
+   const badge=document.querySelector('.statusline .pill');
+   if(badge){badge.textContent='Subject not indexed';badge.classList.remove('good')}
+   summary.textContent='No evidence dossier is available for this subject link. TENS has not searched or verified records for this address.';
+   meta.textContent='Unrecognized subject identifiers must not be redirected to another investigation. This is not proof that no records exist.';
+   updated.textContent='No research request submitted';
+   recordsEl.textContent='No subject records loaded.';
+   unknownEl.textContent='Select a listed subject or ask TENS an explicit question to begin a source-backed review.';
+   return;
+ }
+ const coverage=page.lanes.map(x=>x[0]+': '+x[1]).join(' ');
+ const dossierQ='Build one current evidence-backed subject dossier for '+page.title+'. Cover these sections from the same admitted evidence bundle: '+coverage+' Include verified findings, supporting records, and unresolved gaps. Facts first; do not speculate.';
  try{
    const r=await research(dossierQ);renderBundle(r);updated.textContent='Current source-linked dossier loaded · '+new Date().toLocaleString();
  }catch(e){
