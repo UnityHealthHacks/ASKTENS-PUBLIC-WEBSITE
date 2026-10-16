@@ -12,6 +12,8 @@ on:
       - 'tens-topic-evidence-boundary.js'
       - 'tests/topic-evidence-boundary.test.cjs'
       - 'tests/topic-routing-no-cross-project-fallback.test.cjs'
+      - 'browse.html'
+      - 'tests/hurley-public-source-links.test.cjs'
       - 'backend/cloudflare-r204-review/worker.mjs'
       - 'tests/research-cors-preflight.test.cjs'
       - '.github/workflows/business-preview-checks.yml'
@@ -36,6 +38,8 @@ jobs:
         run: node --test tests/topic-evidence-boundary.test.cjs
       - name: Reject unknown topic links without cross-project fallback
         run: node --test tests/topic-routing-no-cross-project-fallback.test.cjs
+      - name: Test Lyons Bay source links and prevent unsupported findings
+        run: node --test tests/hurley-public-source-links.test.cjs
       - name: Test public Q&A provider-to-guard contract
         run: node --test tests/public-qa-contract.test.cjs
       - name: Test public research CORS preflight boundaries
