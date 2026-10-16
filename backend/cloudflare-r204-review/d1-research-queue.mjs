@@ -75,7 +75,9 @@ export async function fail(db,{jobId,claimToken,errorCode,now=Date.now()}){
  const r=await db.prepare("UPDATE research_jobs SET state='FAILED',result_json=NULL,error_code=?1,claim_token=NULL,claim_expires_at=NULL,updated_at=?2 WHERE id=?3 AND state='RUNNING' AND claim_token=?4 AND claim_expires_at>?2").bind(String(errorCode||'R203_LOCAL_HOLD').slice(0,120),now,jobId,claimToken).run();
  return changes(r)===1?{status:200,state:'FAILURE_ACCEPTED'}:{status:409,error:'JOB_STATE_CONFLICT'};
 }
-export async function status(db,id){
+// Pass {now} to lazily expire THIS job only (exact-id scope) so an abandoned job is never reported QUEUED past TTL. Omitted now = pure read.
+export async function status(db,id,{now}={}){
+ if(now!==undefined&&jobIdOk(id))await expireStale(db,now,[id]);
  const row=await db.prepare('SELECT id,state,result_json,error_code,created_at,updated_at FROM research_jobs WHERE id=?').bind(id).first();
  if(!row)return null;let result=null;if(row.result_json){try{result=JSON.parse(row.result_json)}catch{}}
  return {jobId:row.id,state:row.state,result,errorCode:row.error_code||null,createdAt:row.created_at,updatedAt:row.updated_at};
@@ -112,7 +114,7 @@ export async function handleResearchRoute(request,env,ctx){
   }
   const id=u.searchParams.get('jobId');
   if([...u.searchParams.keys()].some(k=>k!=='jobId')||!jobIdOk(id))return json({error:'JOB_ID_INVALID'},400,uiOrigin);
-  const s=await status(env.DB,id);return s?json(s,200,uiOrigin):json({error:'NOT_FOUND'},404,uiOrigin);
+  const s=await status(env.DB,id,{now:Date.now()});return s?json(s,200,uiOrigin):json({error:'NOT_FOUND'},404,uiOrigin);
  }
  let text;try{text=await ctx.bodyText(request)}catch{return json({error:'INVALID_BODY'},400)}
  if(!(await ctx.verifyInternal(request,text,env)))return json({error:'UNAUTHORIZED'},401);

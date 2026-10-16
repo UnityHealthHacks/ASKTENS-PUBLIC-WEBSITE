@@ -174,3 +174,13 @@ test('scoped expiry never expires a different stale job; invalid scope refuses b
  assert.equal(db.raw.prepare('SELECT state FROM research_jobs WHERE id=?').get(id(2)).state,'FAILED');
  assert.equal(db.raw.prepare('SELECT state FROM research_jobs WHERE id=?').get(id(1)).state,'QUEUED');
 });
+test('status lazily expires only the requested stale job; plain status stays a pure read',async()=>{
+ const db=d1();const old=1000,fresh=1000+Q.TTL_MS+500,now=1000+Q.TTL_MS+1000;
+ await Q.enqueue(db,{id:id(31),question:'old',now:old});await Q.enqueue(db,{id:id(32),question:'old other',now:old});await Q.enqueue(db,{id:id(33),question:'fresh',now:fresh});
+ assert.equal((await Q.status(db,id(31))).state,'QUEUED','no now => no write');
+ const s=await Q.status(db,id(31),{now});assert.equal(s.state,'FAILED');assert.equal(s.errorCode,'EXPIRED_UNCLAIMED');
+ assert.equal((await Q.status(db,id(32))).state,'QUEUED','other stale job untouched by exact-id scope');
+ assert.equal((await Q.status(db,id(33),{now})).state,'QUEUED','fresh job not expired');
+ assert.equal((await Q.status(db,'not-a-job',{now})),null);
+ const c=await Q.complete(db,{jobId:id(31),claimToken:'x',result:good(),now});assert.equal(c.status,409);
+});
