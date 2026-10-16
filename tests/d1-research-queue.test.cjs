@@ -109,6 +109,16 @@ test('route handler: public contract preserved; internal needs signature AND fre
  await st404({...ctx,sessionHash:async()=>undefined},{'x-tens-public-session':SESS});await st404({...ctx,sessionHash:async()=>null},{'x-tens-public-session':SESS});
  assert.equal(db.raw.prepare('select state from research_jobs where id=?').get(stale.jobId).state,'QUEUED','unauthorised polls must not expire');
  assert.equal((await (await pub('/api/research/status?jobId='+stale.jobId)).json()).state,'FAILED','owner poll expires');
+ // fail-closed POST: no resolver / malformed or non-hash resolver result / missing or bad token => no row written
+ const rows=()=>db.raw.prepare('select count(*) c from research_jobs').get().c,before=rows();
+ const postWith=(c,h)=>Q.handleResearchRoute(new Request('https://api.asktens.com/api/research',{method:'POST',headers:{origin:UI,'content-type':'application/json',...h},body:JSON.stringify({question:'anon'})}),env,c);
+ const H={'x-tens-public-session':SESS};
+ for(let i=0;i<4;i++)assert.equal((await postWith(noResolver,H)).status,400,'no resolver');
+ for(const bad of [null,undefined,false,'',  'abc','A'.repeat(64),'g'.repeat(64),'a'.repeat(63),123,{}])assert.equal((await postWith({...ctx,sessionHash:async()=>bad},H)).status,400,String(bad));
+ assert.equal((await postWith(ctx,{})).status,400,'missing token');assert.equal((await postWith(ctx,{'x-tens-public-session':'zz'})).status,400,'bad token');
+ assert.equal(rows(),before,'no writes on any refusal');
+ assert.equal((await postWith(ctx,H)).status,202,'correct resolver still enqueues');
+ assert.equal(db.raw.prepare('select count(*) c from research_jobs where session_hash is null').get().c,0,'no NULL session_hash rows');
 });
 
 

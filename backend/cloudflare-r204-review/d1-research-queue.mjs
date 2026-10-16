@@ -114,8 +114,9 @@ export async function handleResearchRoute(request,env,ctx){
   if(p==='/api/research'){
    let b;try{b=JSON.parse(await ctx.bodyText(request,8192)||'{}')}catch{return json({error:'INVALID_JSON'},400,uiOrigin)}
    const q=String(b?.question||'').trim();if(!q||q.length>MAX_QUESTION)return json({error:'QUESTION_INVALID'},400,uiOrigin);
-   const sessionHash=typeof ctx.sessionHash==='function'?await ctx.sessionHash(request):null;
-   if(sessionHash===false)return json({error:'SESSION_REQUIRED'},400,uiOrigin);
+   // fail closed: a resolver is mandatory and must yield a 64-hex hash; no anonymous (NULL session_hash) enqueue
+   const sessionHash=typeof ctx.sessionHash==='function'?await ctx.sessionHash(request):false;
+   if(typeof sessionHash!=='string'||!/^[a-f0-9]{64}$/.test(sessionHash))return json({error:'SESSION_REQUIRED'},400,uiOrigin);
    const id='R203WEB_'+crypto.randomUUID().replace(/-/g,''),r=await enqueue(env.DB,{id,question:q,sessionHash});
    return r.error?json({error:r.error},r.error==='SESSION_QUEUE_BUSY'?429:503,uiOrigin):json({jobId:id,state:'QUEUED'},202,uiOrigin);
   }
