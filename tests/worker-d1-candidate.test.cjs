@@ -19,7 +19,7 @@ function d1({migrate=true}={}){
 function kv(){const m=new Map();return {m,async get(k,t){const v=m.get(k);return v==null?null:(t==='json'?JSON.parse(v):v)},async put(k,v){m.set(k,String(v))}}}
 const sess=n=>String(n).padStart(32,'a').replace(/[^a-f0-9]/g,'a').slice(-32);
 const post=(env,question,s)=>cand.default.fetch(new Request(API+'/api/research',{method:'POST',headers:{origin:UI,'content-type':'application/json',...(s?{'x-tens-public-session':s}:{})},body:JSON.stringify({question})}),env);
-const status=(env,id)=>cand.default.fetch(new Request(API+'/api/research/status?jobId='+id,{headers:{origin:UI}}),env);
+const status=(env,id,s)=>cand.default.fetch(new Request(API+'/api/research/status?jobId='+id,{headers:{origin:UI,...(s?{'x-tens-public-session':s}:{})}}),env);
 const internal=(env,p,body,nonce)=>cand.default.fetch(new Request(API+p,{method:'POST',headers:{'x-tens-timestamp':String(Date.now()),'x-tens-nonce':nonce||('nonce'+(seq++)+'x'.repeat(16)),'x-tens-signature':VALID},body:JSON.stringify(body||{})}),env);
 const good=(over={})=>({protocol:'TENS_R202_PUBLIC_RESULT_1',state:'COMPLETE',providerWrite:false,productionMutation:false,assignmentId:'A',checkpointHash:'h',verified:[],unknowns:[{statement:'u'}],sources:[],...over});
 test.before(async()=>{
@@ -75,7 +75,7 @@ test('wrong, replayed, stale and cross-job claim tokens cannot finish jobs',asyn
  const cb2=await (await internal(env,'/internal/claim')).json();assert.equal(cb2.jobId,b);assert.equal(cb2.reclaimed,true);
  assert.equal((await internal(env,'/internal/complete',{jobId:b,claimToken:cb.claimToken,result:good()})).status,409,'stale token');
  assert.equal((await internal(env,'/internal/complete',{jobId:b,claimToken:cb2.claimToken,result:good()})).status,200);
- assert.equal((await (await status(env,b)).json()).state,'COMPLETE');
+ assert.equal((await (await status(env,b,sess(2))).json()).state,'COMPLETE');
 });
 test('unsigned or badly signed internal calls are rejected before any state change',async()=>{
  const env={TENS_D1_QUEUE:FLAG,TENS_PUBLIC_JOBS:kv(),DB:d1()};await post(env,'a',sess(1));
@@ -92,7 +92,7 @@ test('already-queued legacy job is not stranded: dual-read status, legacy-first 
  const neu=(await (await post(env,'new question',sess(5))).json()).jobId;
  assert.equal(kvs.m.get('queue:index:v1'),snapshot,'legacy KV queue index must be untouched by new writes');
  assert.equal((await (await status(env,old)).json()).state,'QUEUED','legacy status still readable');
- assert.equal((await (await status(env,neu)).json()).state,'QUEUED');
+ assert.equal((await (await status(env,neu,sess(5))).json()).state,'QUEUED');
  const c1=await (await internal(env,'/internal/claim')).json();assert.equal(c1.jobId,old,'oldest (legacy) first');
  assert.equal((await internal(env,'/internal/complete',{jobId:old,claimToken:'wrong',result:good()})).status,409,'legacy token enforced by legacy');
  const c2=await (await internal(env,'/internal/claim')).json();assert.equal(c2.jobId,neu,'then D1');
@@ -137,9 +137,28 @@ test('HTTP status through wrapper lazily expires only the stale job; fresh job a
  const env={TENS_D1_QUEUE:FLAG,TENS_PUBLIC_JOBS:kv(),DB:d1()};
  const a=(await (await post(env,'old one',sess(41))).json()).jobId,b=(await (await post(env,'fresh one',sess(42))).json()).jobId;
  env.DB.raw.prepare('UPDATE research_jobs SET created_at=? WHERE id=?').run(Date.now()-86400000-5000,a);
- const sa=await (await status(env,a)).json(),sb=await (await status(env,b)).json();
+ const sa=await (await status(env,a,sess(41))).json(),sb=await (await status(env,b,sess(42))).json();
  assert.equal(sa.state,'FAILED');assert.equal(sa.errorCode,'EXPIRED_UNCLAIMED');
  assert.equal(sb.state,'QUEUED');
  assert.equal(env.DB.raw.prepare('select state from research_jobs where id=?').get(b).state,'QUEUED');
  assert.equal(env.TENS_PUBLIC_JOBS.m.has('queue:index:v1'),false);
+});
+test('session-bound status: only the owning tab sees a D1 job; others get a uniform 404 and cause no expiry write',async()=>{
+ const env={TENS_D1_QUEUE:FLAG,TENS_PUBLIC_JOBS:kv(),DB:d1()};
+ const a=(await (await post(env,'secret question',sess(51))).json()).jobId,b=(await (await post(env,'fresh',sess(52))).json()).jobId;
+ env.DB.raw.prepare('UPDATE research_jobs SET created_at=? WHERE id=?').run(Date.now()-86400000-5000,a);
+ const missing=await (await status(env,'R203WEB_'+'z'.repeat(32),sess(51))).text();
+ for(const s of [undefined,sess(53),'not-hex','A'.repeat(32),sess(51)+'0']){
+  const r=await status(env,a,s);assert.equal(r.status,404,String(s));const t=await r.text();
+  assert.equal(t,missing,'uniform body');assert.ok(!t.includes('secret')&&!t.includes('QUEUED')&&!t.includes('EXPIRED'));
+ }
+ assert.equal(env.DB.raw.prepare('select state from research_jobs where id=?').get(a).state,'QUEUED','unauthorised poll must not mutate');
+ const ok=await (await status(env,a,sess(51))).json();assert.equal(ok.state,'FAILED');assert.equal(ok.errorCode,'EXPIRED_UNCLAIMED');
+ assert.equal((await (await status(env,b,sess(52))).json()).state,'QUEUED');assert.equal((await status(env,b,sess(51))).status,404,'rotated/other session');
+ assert.equal((await status(env,b)).status,404);
+ assert.equal((await cand.default.fetch(new Request(API+'/api/research/status?jobId='+b,{headers:{origin:'https://evil.example','x-tens-public-session':sess(52)}}),env)).status,403);
+ const legacyEnv={TENS_PUBLIC_JOBS:env.TENS_PUBLIC_JOBS,DB:d1()};const legacyId=(await (await post(legacyEnv,'legacy q')).json()).jobId;
+ assert.equal((await status(env,legacyId)).status,200,'legacy-only job keeps working without a session');
+ const pre=await cand.default.fetch(new Request(API+'/api/research',{method:'OPTIONS',headers:{origin:UI,'access-control-request-method':'POST','access-control-request-headers':'x-tens-public-session'}}),env);
+ assert.ok(pre.status<400&&/x-tens-public-session/i.test(pre.headers.get('access-control-allow-headers')||''));
 });

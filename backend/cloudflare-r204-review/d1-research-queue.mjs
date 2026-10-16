@@ -76,7 +76,14 @@ export async function fail(db,{jobId,claimToken,errorCode,now=Date.now()}){
  return changes(r)===1?{status:200,state:'FAILURE_ACCEPTED'}:{status:409,error:'JOB_STATE_CONFLICT'};
 }
 // Pass {now} to lazily expire THIS job only (exact-id scope) so an abandoned job is never reported QUEUED past TTL. Omitted now = pure read.
-export async function status(db,id,{now}={}){
+// Pass {sessionHash} (string) to require the job's stored session_hash to match BEFORE any expiry write or data read; mismatch/absent => null (same as not found).
+export async function exists(db,id){return !!(jobIdOk(id)&&await db.prepare('SELECT 1 AS x FROM research_jobs WHERE id=?').bind(id).first())}
+export async function status(db,id,{now,sessionHash}={}){
+ if(sessionHash!==undefined){
+  if(typeof sessionHash!=='string'||!/^[a-f0-9]{64}$/.test(sessionHash)||!jobIdOk(id))return null;
+  const own=await db.prepare('SELECT session_hash FROM research_jobs WHERE id=?').bind(id).first();
+  if(!own||own.session_hash!==sessionHash)return null;
+ }
  if(now!==undefined&&jobIdOk(id))await expireStale(db,now,[id]);
  const row=await db.prepare('SELECT id,state,result_json,error_code,created_at,updated_at FROM research_jobs WHERE id=?').bind(id).first();
  if(!row)return null;let result=null;if(row.result_json){try{result=JSON.parse(row.result_json)}catch{}}
@@ -114,7 +121,8 @@ export async function handleResearchRoute(request,env,ctx){
   }
   const id=u.searchParams.get('jobId');
   if([...u.searchParams.keys()].some(k=>k!=='jobId')||!jobIdOk(id))return json({error:'JOB_ID_INVALID'},400,uiOrigin);
-  const s=await status(env.DB,id,{now:Date.now()});return s?json(s,200,uiOrigin):json({error:'NOT_FOUND'},404,uiOrigin);
+  const sh=typeof ctx.sessionHash==='function'?await ctx.sessionHash(request):undefined;
+  const s=await status(env.DB,id,{now:Date.now(),sessionHash:sh===false?'':sh});return s?json(s,200,uiOrigin):json({error:'NOT_FOUND'},404,uiOrigin);
  }
  let text;try{text=await ctx.bodyText(request)}catch{return json({error:'INVALID_BODY'},400)}
  if(!(await ctx.verifyInternal(request,text,env)))return json({error:'UNAUTHORIZED'},401);

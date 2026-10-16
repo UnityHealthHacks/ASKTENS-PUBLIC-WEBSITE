@@ -8,7 +8,7 @@
 //    status reads D1 first, then the legacy handler. All new jobs are written to D1 only.
 //  * PRR, share, telemetry, business and health routes are always delegated to worker.mjs untouched.
 import legacy from './worker.mjs';
-import {handleResearchRoute,status as d1Status,jobIdOk} from './d1-research-queue.mjs';
+import {handleResearchRoute,status as d1Status,exists as d1Exists,jobIdOk} from './d1-research-queue.mjs';
 
 const UI_ORIGIN='https://asktens.com',FLAG='SCHEMA_VERIFIED_V1';
 // Public verification key copied from worker.mjs PUBLIC_KEY (public, not a secret). tests/worker-d1-candidate.test.cjs fails on drift.
@@ -62,7 +62,11 @@ export default{async fetch(request,env,ctx){
   if(p==='/api/research/status'){
    if(request.headers.get('origin')!==UI_ORIGIN)return json({error:'ORIGIN_NOT_ALLOWED'},403);
    const id=u.searchParams.get('jobId');
-   if(jobIdOk(id)){const s=await d1Status(env.DB,id,{now:Date.now()});if(s)return json(s,200,UI_ORIGIN)}
+   if(jobIdOk(id)&&await d1Exists(env.DB,id)){ // D1 job: session binding is checked before expiry or data; never falls through to legacy
+    const sh=await sessionHash(request);
+    const s=await d1Status(env.DB,id,{now:Date.now(),sessionHash:sh===false?'':sh});
+    return s?json(s,200,UI_ORIGIN):json({error:'NOT_FOUND'},404,UI_ORIGIN);
+   }
    return legacy.fetch(request,env,ctx); // legacy jobs (KV/DB row) and 400/404 handling stay as before
   }
   if(p==='/api/research')return await handleResearchRoute(request,env,hctx);
