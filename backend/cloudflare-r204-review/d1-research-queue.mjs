@@ -121,8 +121,9 @@ export async function handleResearchRoute(request,env,ctx){
   }
   const id=u.searchParams.get('jobId');
   if([...u.searchParams.keys()].some(k=>k!=='jobId')||!jobIdOk(id))return json({error:'JOB_ID_INVALID'},400,uiOrigin);
-  const sh=typeof ctx.sessionHash==='function'?await ctx.sessionHash(request):undefined;
-  const s=await status(env.DB,id,{now:Date.now(),sessionHash:sh===false?'':sh});return s?json(s,200,uiOrigin):json({error:'NOT_FOUND'},404,uiOrigin);
+  // fail closed: the public status route needs a session resolver and a matching token; no resolver => uniform 404, no read, no expiry write
+  const sh=typeof ctx.sessionHash==='function'?await ctx.sessionHash(request):false;
+  const s=sh===false||sh==null?null:await status(env.DB,id,{now:Date.now(),sessionHash:sh});return s?json(s,200,uiOrigin):json({error:'NOT_FOUND'},404,uiOrigin);
  }
  let text;try{text=await ctx.bodyText(request)}catch{return json({error:'INVALID_BODY'},400)}
  if(!(await ctx.verifyInternal(request,text,env)))return json({error:'UNAUTHORIZED'},401);

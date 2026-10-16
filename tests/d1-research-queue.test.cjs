@@ -83,8 +83,8 @@ test('nonce replay is rejected across isolates (shared table) and old nonces are
 test('route handler: public contract preserved; internal needs signature AND fresh nonce; claim -> complete -> status',async()=>{
  const db=d1(),UI='https://asktens.com';
  const json=(data,status=200,origin=null)=>new Response(JSON.stringify({...data,providerWrite:false,productionMutation:false}),{status,headers:origin?{'access-control-allow-origin':origin}:{}});
- let sigOk=true;const ctx={uiOrigin:UI,json,bodyText:r=>r.text(),verifyInternal:async()=>sigOk},env={DB:db};
- const pub=(p,o={})=>Q.handleResearchRoute(new Request('https://api.asktens.com'+p,{headers:{origin:UI,'content-type':'application/json'},...o}),env,ctx);
+ let sigOk=true;const ctx={uiOrigin:UI,json,bodyText:r=>r.text(),verifyInternal:async()=>sigOk,sessionHash:async r=>{const t=r.headers.get('x-tens-public-session')||'';return /^[a-f0-9]{32}$/.test(t)?Buffer.from(await crypto.subtle.digest('SHA-256',new TextEncoder().encode('t:'+t))).toString('hex'):false}},env={DB:db};const SESS='a'.repeat(32);
+ const pub=(p,o={})=>Q.handleResearchRoute(new Request('https://api.asktens.com'+p,{headers:{origin:UI,'content-type':'application/json','x-tens-public-session':SESS},...o}),env,ctx);
  let n=0;const internal=(p,body)=>Q.handleResearchRoute(new Request('https://api.asktens.com'+p,{method:'POST',headers:{'x-tens-nonce':'nonce-'+(n++)+'-aaaaaaaaaaaaaaaaaa'},body:JSON.stringify(body||{})}),env,ctx);
  assert.equal(await Q.handleResearchRoute(new Request('https://api.asktens.com/health'),env,ctx),null);
  assert.equal((await Q.handleResearchRoute(new Request('https://api.asktens.com/api/research',{method:'POST',headers:{origin:'https://evil.example'},body:'{}'}),env,ctx)).status,403);
@@ -100,6 +100,15 @@ test('route handler: public contract preserved; internal needs signature AND fre
  const st=await (await pub('/api/research/status?jobId='+jobId)).json();assert.equal(st.state,'COMPLETE');
  assert.equal((await pub('/api/research/status?jobId=bad')).status,400);
  assert.equal((await Q.handleResearchRoute(new Request('https://api.asktens.com/api/research/status?jobId='+jobId,{headers:{origin:UI}}),{},ctx)).status,503);
+ // fail-closed status: no resolver / missing / wrong / malformed session => uniform 404, no data, no lazy-expiry write
+ const stale=await (await pub('/api/research',{method:'POST',body:JSON.stringify({question:'stale'})})).json();
+ db.raw.prepare('UPDATE research_jobs SET created_at=? WHERE id=?').run(Date.now()-Q.TTL_MS-5000,stale.jobId);
+ const st404=async(c,h)=>{const r=await Q.handleResearchRoute(new Request('https://api.asktens.com/api/research/status?jobId='+stale.jobId,{headers:{origin:UI,...h}}),env,c);assert.equal(r.status,404);const t=await r.text();assert.ok(!/QUEUED|FAILED|EXPIRED|stale/.test(t));};
+ const {sessionHash:_r,...noResolver}=ctx;
+ await st404(noResolver,{'x-tens-public-session':SESS});await st404(noResolver,{});await st404(ctx,{});await st404(ctx,{'x-tens-public-session':'b'.repeat(32)});await st404(ctx,{'x-tens-public-session':'zz'});
+ await st404({...ctx,sessionHash:async()=>undefined},{'x-tens-public-session':SESS});await st404({...ctx,sessionHash:async()=>null},{'x-tens-public-session':SESS});
+ assert.equal(db.raw.prepare('select state from research_jobs where id=?').get(stale.jobId).state,'QUEUED','unauthorised polls must not expire');
+ assert.equal((await (await pub('/api/research/status?jobId='+stale.jobId)).json()).state,'FAILED','owner poll expires');
 });
 
 
