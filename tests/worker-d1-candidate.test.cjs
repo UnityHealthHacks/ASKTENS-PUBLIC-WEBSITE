@@ -133,3 +133,13 @@ test('candidate hygiene: legacy worker.mjs verification key unchanged, candidate
  assert.ok(w.includes(msgExpr),'legacy signed-message format changed');assert.ok(c.includes(msgExpr),'candidate signed-message format drifted');
  assert.doesNotMatch(c.split('\n').filter(l=>!l.trim().startsWith('//')).join('\n'),/r212|activationProof/i);assert.ok(c.includes("env?.TENS_D1_QUEUE!==FLAG"));
 });
+test('HTTP status through wrapper lazily expires only the stale job; fresh job and legacy KV untouched',async()=>{
+ const env={TENS_D1_QUEUE:FLAG,TENS_PUBLIC_JOBS:kv(),DB:d1()};
+ const a=(await (await post(env,'old one',sess(41))).json()).jobId,b=(await (await post(env,'fresh one',sess(42))).json()).jobId;
+ env.DB.raw.prepare('UPDATE research_jobs SET created_at=? WHERE id=?').run(Date.now()-86400000-5000,a);
+ const sa=await (await status(env,a)).json(),sb=await (await status(env,b)).json();
+ assert.equal(sa.state,'FAILED');assert.equal(sa.errorCode,'EXPIRED_UNCLAIMED');
+ assert.equal(sb.state,'QUEUED');
+ assert.equal(env.DB.raw.prepare('select state from research_jobs where id=?').get(b).state,'QUEUED');
+ assert.equal(env.TENS_PUBLIC_JOBS.m.has('queue:index:v1'),false);
+});

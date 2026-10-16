@@ -62,7 +62,7 @@ export default{async fetch(request,env,ctx){
   if(p==='/api/research/status'){
    if(request.headers.get('origin')!==UI_ORIGIN)return json({error:'ORIGIN_NOT_ALLOWED'},403);
    const id=u.searchParams.get('jobId');
-   if(jobIdOk(id)){const s=await d1Status(env.DB,id);if(s)return json(s,200,UI_ORIGIN)}
+   if(jobIdOk(id)){const s=await d1Status(env.DB,id,{now:Date.now()});if(s)return json(s,200,UI_ORIGIN)}
    return legacy.fetch(request,env,ctx); // legacy jobs (KV/DB row) and 400/404 handling stay as before
   }
   if(p==='/api/research')return await handleResearchRoute(request,env,hctx);
