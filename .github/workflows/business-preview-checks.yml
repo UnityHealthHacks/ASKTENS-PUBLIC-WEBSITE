@@ -11,6 +11,8 @@ on:
       - 'topic.html'
       - 'tens-topic-evidence-boundary.js'
       - 'tests/topic-evidence-boundary.test.cjs'
+      - 'backend/cloudflare-r204-review/worker.mjs'
+      - 'tests/research-cors-preflight.test.cjs'
       - '.github/workflows/business-preview-checks.yml'
 
 permissions:
@@ -33,6 +35,8 @@ jobs:
         run: node --test tests/topic-evidence-boundary.test.cjs
       - name: Test public Q&A provider-to-guard contract
         run: node --test tests/public-qa-contract.test.cjs
+      - name: Test public research CORS preflight boundaries
+        run: node --test tests/research-cors-preflight.test.cjs
       - name: Test worker claim adapter contract and queued-timeout honesty
         run: node --test tests/worker-adapter-contract.test.cjs
       - name: Test review-only D1 atomic research queue (SQLite)
