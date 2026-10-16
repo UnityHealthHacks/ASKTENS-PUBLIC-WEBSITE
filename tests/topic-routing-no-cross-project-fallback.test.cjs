@@ -35,7 +35,7 @@ function openSubject(search){
   return {context,element,fetches,events};
 }
 
-for(const id of ['hurley-dock','not-a-topic','__proto__','constructor','<script>alert(1)</script>','']){
+for(const id of ['unlisted-subject-9999','not-a-topic','__proto__','constructor','<script>alert(1)</script>','']){
   test('unrecognized subject id '+JSON.stringify(id)+' fails closed without other dossier or backend call',()=>{
     const url=id?'?id='+encodeURIComponent(id):'';
     const r=openSubject(url);
