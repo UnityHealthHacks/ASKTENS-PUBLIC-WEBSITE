@@ -23,6 +23,7 @@ header{position:sticky;top:0;z-index:20;border-bottom:1px solid rgba(150,200,236
 <main class="wrap">
 <section class="hero reveal"><p class="eyebrow">Living subject dossier · source verification required</p><h1 id="title">TENS subject</h1><p id="intro"></p><div class="statusline"><span class="pill">Source verification required</span><span class="pill" id="updated">Loading current record…</span><span class="pill">Facts first · assumptions never</span></div></section>
 <section class="summary reveal"><h2>Where the record stands now</h2><div class="answer" id="summaryAnswer">TENS is checking the current admitted evidence…</div><ul class="highlights" id="highlights"></ul><div class="meta" id="summaryMeta"></div></section>
+<section class="recordsBox reveal" id="verifiedPublicLinks" hidden><h2>Direct public source documents</h2><div class="meta">These are links to specific public documents, not a completed TENS research answer. The source index is owner-maintained. FDEP and County permissions and approvals remain distinct.</div><div class="records" id="publicSourceLinks"></div></section>
 <section class="grid" id="lanes"></section>
 <section class="recordsBox reveal"><h2>Evidence files & records</h2><div class="meta">These are the public-safe source records returned across the current subject summaries. Archived copies show their preserved SHA-256 trail.</div><div class="records" id="records"><div class="loading">Evidence files will appear as the summaries finish.</div></div></section>
 <section class="unknownBox reveal" style="margin-top:18px"><h2>What is still unresolved</h2><div class="unknownList" id="unknowns"><div class="loading">Open questions and evidence limits will appear here.</div></div></section>
@@ -70,6 +71,15 @@ const cfgs={
 ['Finance & reimbursements','What does the record establish about North Water Tower reimbursements, payments, purchase orders, and funding?'],
 ['Brown & Caldwell','What does the record establish about Brown & Caldwell work, invoices, pay applications, and purchase orders connected with North Water Tower?'],
 ['47th Street discrepancy','What does the record establish about the relationship or discrepancy between North Water Tower reimbursement records and 47th Street project payment applications?']]},
+'hurley-dock':{title:'Lyons Bay — 227-foot private dock proposal',intro:'Special Exception Petition 1929, FDEP General Permit 0464848-001 EG, recorded project plans, waterway navigation, and unresolved approvals. An issued FDEP permit does not establish final County special-exception approval.',lanes:[
+['County application and status','What do official County records establish about SE 1929 for the Lyons Bay dock, submitted plans, reviews and current decision status?'],
+['Plan and dimensions','What do the dated applicant drawings establish about the proposed 207-foot walkway, terminal platform, boat lift and footprint, and which revisions remain unverified?'],
+['Environmental and navigation review','What do official FDEP and County records establish about seagrass, water depths, navigation and applicable permit conditions?'],
+['Public records and open questions','Which County and FDEP source records are released for Special Exception 1929 and what project-specific measurements or approvals are still unknown?']],publicLinks:[
+{title:'Public records and source index',description:'Owner-maintained source guide; not an official County finding',url:'https://docs.google.com/document/d/1hFYDq8SvItf968-SLz86v6XC5wbOBpyb8MJpmxhVbUg/edit'},
+{title:'FDEP issued permit — original PDF copy',description:'Permit 0464848-001 EG, November 21, 2025; stamped project drawings at PDF pages 8–13',url:'https://drive.google.com/file/d/1LLm2jLGYVt-aXt83CvourBtyf6g2cnBv/view'},
+{title:'Sarasota County official notice',description:'County notice of SE 1929 and public hearing; verify current decision separately',url:'https://www.scgov.net/Home/Components/News/News/9340/'}
+]},
 '47th-street':{title:'47th Street',intro:'A living evidence page for the 47th Street project records: payment applications, Brown & Caldwell, purchase orders, the North Water Tower cross-project discrepancy, files, and unresolved allocations.',lanes:[
 ['Background & current status','What does the current public record establish about the 47th Street project and its documented work?'],
 ['Payment applications','What does the record establish about 47th Street payment applications, checks, invoices, and purchase orders?'],
@@ -82,6 +92,13 @@ const page=cfg||{title:'Subject not indexed',intro:'This address does not identi
 document.title=page.title+' — TENS Living Evidence';document.getElementById('title').textContent=page.title;document.getElementById('intro').textContent=page.intro;
 const lanesEl=document.getElementById('lanes'),recordsEl=document.getElementById('records'),unknownEl=document.getElementById('unknowns'),summary=document.getElementById('summaryAnswer'),highlights=document.getElementById('highlights'),meta=document.getElementById('summaryMeta'),updated=document.getElementById('updated');
 const sourceMap=new Map(),unknownMap=new Map();
+if(cfg?.publicLinks?.length){
+ const publicPanel=document.getElementById('verifiedPublicLinks');
+ publicPanel.hidden=false;
+ document.getElementById('publicSourceLinks').innerHTML=cfg.publicLinks.map(link=>
+   '<a class="record" href="'+escapeHtml(link.url)+'" target="_blank" rel="noopener noreferrer"><strong>'+escapeHtml(link.title)+'</strong><span>'+escapeHtml(link.description)+'</span></a>'
+ ).join('');
+}
 page.lanes.forEach(([name,q],i)=>{const el=document.createElement('article');el.className='card reveal';el.id='lane'+i;el.innerHTML='<h2>'+escapeHtml(name)+'</h2><div class="sub">'+escapeHtml(q)+'</div><div class="loading">TENS is checking source-linked evidence…</div>';lanesEl.appendChild(el)});
 function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function reveal(el){requestAnimationFrame(()=>el.classList.add('on'))}
