@@ -92,7 +92,9 @@ async function main(){
  assert.ok(!quote.url.includes('invoices'));
  console.log('PASS one-click quote restore, no transmission and clean URL');
  await evaluate("(()=>{location.href='business.html';return true})()");
- await until("location.pathname==='/business.html'&&Boolean(window.TENS_BUSINESS_CAPABILITIES)",'RETURN');
+ // Earlier capability scripts may be ready before the later form submit handler.
+  // Require the fully loaded new document, not merely the first global namespace.
+  await until("location.pathname==='/business.html'&&document.readyState==='complete'&&Boolean(document.getElementById('freeAssessmentForm')&&window.TENS_BUSINESS_CAPABILITIES&&window.TENS_BUSINESS_READINESS)",'RETURN');
  const denied=await evaluate("(()=>{document.getElementById('freeBusinessType').value='Construction company';document.getElementById('freeOutcome').value='Repair laptops';document.getElementById('freeProblem').value='Remote into our laptops and repair our computers';document.getElementById('freeAssessmentForm').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));return {blocked:document.getElementById('freeAssessmentProceed').hidden,text:document.getElementById('freeAssessmentResult').textContent}})()");
  assert.equal(denied.blocked,true);assert.match(denied.text,/not available/i);
  console.log('PASS unsupported device-repair job cannot proceed');
