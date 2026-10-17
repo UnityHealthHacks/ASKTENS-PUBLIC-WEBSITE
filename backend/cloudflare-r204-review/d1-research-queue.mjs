@@ -22,17 +22,22 @@ export function sourceProblem(r){
  if(!r||!Array.isArray(r.sources)||!Array.isArray(r.verified))return 'RESULT_MALFORMED';
  const ids=new Set();
  for(const x of r.sources){
-  if(!x||!EVIDENCE_ID.test(String(x.evidenceId||''))||x.preservationVerified!==true)return 'SOURCE_NOT_PRESERVED';
+  if(!x||typeof x.evidenceId!=='string'||!EVIDENCE_ID.test(x.evidenceId)||x.preservationVerified!==true)return 'SOURCE_NOT_PRESERVED';
   if(ids.has(x.evidenceId))return 'SOURCE_DUPLICATE';
-  if(!HEX64.test(String(x.contentHash||'')))return 'SOURCE_HASH_MISSING';
+  if(typeof x.contentHash!=='string'||!HEX64.test(x.contentHash))return 'SOURCE_HASH_MISSING';
   if(x.sourceKind!=='PUBLIC_WEB'&&x.sourceKind!=='ARCHIVED_PUBLIC_RECORD')return 'SOURCE_KIND_INVALID';
   if(x.sourceKind==='PUBLIC_WEB'&&!safeHttpsSourceUrl(x.url))return 'SOURCE_NOT_PUBLIC';
   if(x.url!==undefined&&x.url!==null&&!safeHttpsSourceUrl(x.url))return 'SOURCE_URL_UNSAFE';
   ids.add(x.evidenceId);
  }
  for(const v of r.verified){
-  if(!Array.isArray(v?.evidenceRefs)||!v.evidenceRefs.length||!v.evidenceRefs.every(i=>ids.has(i)))return 'VERIFIED_UNCITED';
+  if(!Array.isArray(v?.evidenceRefs)||!v.evidenceRefs.length||!v.evidenceRefs.every(i=>typeof i==='string'&&ids.has(i)))return 'VERIFIED_UNCITED';
  }
+ // A COMPLETE result may be evidence-free only when it makes no verified claim.
+ // Never persist orphan source cards or an explicit contradictory answer.
+ if(r.sources.length>0&&r.verified.length===0)return 'SOURCE_UNCITED';
+ if(r.answer==='VERIFIED'&&r.verified.length===0)return 'ANSWER_CONFLICT';
+ if(r.answer==='UNKNOWN'&&r.verified.length>0)return 'ANSWER_CONFLICT';
  return '';
 }
 const changes=r=>Number(r?.meta?.changes??r?.changes??0);
