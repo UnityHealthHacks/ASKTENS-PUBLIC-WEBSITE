@@ -203,3 +203,18 @@ test('status lazily expires only the requested stale job; plain status stays a p
  assert.equal((await Q.status(db,'not-a-job',{now})),null);
  const c=await Q.complete(db,{jobId:id(31),claimToken:'x',result:good(),now});assert.equal(c.status,409);
 });
+
+// Oct 17 review-only boundary regression: do not admit coercible evidence IDs,
+// hashes, orphan sources or contradictory answer states as a completed result.
+test('reject non-string source identities and contradictory source-backed answers',()=>{
+ const x={evidenceId:'DOC_001',sourceKind:'PUBLIC_WEB',url:'https://example.gov/record',contentHash:'a'.repeat(64),preservationVerified:true};
+ const envelope=(sources,verified=[],answer='UNKNOWN')=>({sources,verified,answer});
+ assert.equal(Q.sourceProblem(envelope([{...x,evidenceId:['DOC_001']}])),'SOURCE_NOT_PRESERVED');
+ assert.equal(Q.sourceProblem(envelope([{...x,contentHash:['a'.repeat(64)]}])),'SOURCE_HASH_MISSING');
+ assert.equal(Q.sourceProblem(envelope([x])),'SOURCE_UNCITED');
+ assert.equal(Q.sourceProblem(envelope([],[],'VERIFIED')),'ANSWER_CONFLICT');
+ assert.equal(Q.sourceProblem(envelope([x],[{evidenceRefs:['DOC_001']}],'UNKNOWN')),'ANSWER_CONFLICT');
+ assert.equal(Q.sourceProblem(envelope([x],[{evidenceRefs:[['DOC_001']]}],'VERIFIED')),'VERIFIED_UNCITED');
+ assert.equal(Q.sourceProblem(envelope([],[],'UNKNOWN')),'');
+ assert.equal(Q.sourceProblem(envelope([x],[{evidenceRefs:['DOC_001']}],'VERIFIED')),'');
+});
