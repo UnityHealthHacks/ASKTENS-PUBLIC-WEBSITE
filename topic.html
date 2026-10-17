@@ -128,7 +128,15 @@ function laneHtml(r,q){
 }
 function renderRecords(){const rows=[...sourceMap.values()];recordsEl.innerHTML=rows.length?rows.map(s=>{const derived=String(s.authority||'')==='TENS_VERIFIED_DERIVED_CASE_SUMMARY',kind=derived?'Verified derived case summary':(s.recordType||s.sourceKind||'Public record'),inner='<strong>'+escapeHtml(s.label||'Evidence record')+'</strong><span>'+escapeHtml(kind)+(derived?' · derived from preserved source records':'')+(s.contentHash?' · SHA-256 '+escapeHtml(String(s.contentHash).slice(0,16))+'…':'')+'</span>';return s.url?'<a class="record" href="'+escapeHtml(s.url)+'" target="_blank" rel="noopener">'+inner+'</a>':'<div class="record">'+inner+'</div>'}).join(''):'<div class="loading">No public-safe source record has been attached yet.</div>'}
 function renderUnknowns(){const rows=[...unknownMap.values()];unknownEl.innerHTML=rows.length?rows.map(u=>'<div class="unknownItem">'+escapeHtml(u.statement||'This point remains unresolved.')+'</div>').join(''):'<div class="loading">No additional unresolved item was returned for this subject bundle.</div>'}
-function renderOverview(r){collect(r);const verified=r.verified||[];summary.textContent=r.answer==='UNKNOWN'?'TENS does not currently have enough admitted evidence to state an overview as established fact.':String(r.answer||'Current evidence loaded.');highlights.innerHTML=verified.slice(0,6).map(v=>'<li>'+escapeHtml(v.statement||'')+'</li>').join('');meta.textContent='Source-linked candidate dossier · '+verified.length+' source statement'+(verified.length===1?'':'s')+' · '+(r.sources||[]).length+' supporting record'+((r.sources||[]).length===1?'':'s')+'.';renderRecords();renderUnknowns()}
+function overviewDisplayAnswer(r){
+ if(r.answer==='UNKNOWN')return 'TENS does not currently have enough admitted evidence to state an overview as established fact.';
+ if(r.answer==='VERIFIED'){
+  const cited=(r.verified||[]).find(v=>v&&typeof v.statement==='string'&&v.statement.trim()&&Array.isArray(v.evidenceRefs)&&v.evidenceRefs.length&&v.evidenceRefs.every(ref=>sourceMap.has(ref)));
+  return cited?cited.statement.trim():'TENS could not display a cited finding from the admitted evidence.';
+ }
+ return String(r.answer||'Current evidence loaded.');
+}
+function renderOverview(r){collect(r);const verified=r.verified||[];summary.textContent=overviewDisplayAnswer(r);highlights.innerHTML=verified.slice(0,6).map(v=>'<li>'+escapeHtml(v.statement||'')+'</li>').join('');meta.textContent='Source-linked candidate dossier · '+verified.length+' source statement'+(verified.length===1?'':'s')+' · '+(r.sources||[]).length+' supporting record'+((r.sources||[]).length===1?'':'s')+'.';renderRecords();renderUnknowns()}
 function renderBundle(r){
  sourceMap.clear();unknownMap.clear();renderOverview(r);
  page.lanes.forEach((lane,i)=>{const el=document.getElementById('lane'+i);el.innerHTML='<h2>'+escapeHtml(lane[0])+'</h2><div class="sub">'+escapeHtml(lane[1])+'</div>'+laneHtml(r,lane[1]);});
