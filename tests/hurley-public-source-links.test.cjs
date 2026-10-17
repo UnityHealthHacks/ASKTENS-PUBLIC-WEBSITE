@@ -27,6 +27,12 @@ test('Lyons Bay is a distinct source-linked topic without assumed County approva
  assert.match(links,/1hFYDq8SvItf968-SLz86v6XC5wbOBpyb8MJpmxhVbUg/);
  assert.match(links,/1LLm2jLGYVt-aXt83CvourBtyf6g2cnBv/);
  assert.match(links,/www.scgov.net/);
+ assert.match(links,/23\.1648694\.1/);
+ assert.match(links,/23\.1776682\.1/);
+ assert.match(links,/23\.1776683\.1/);
+ assert.match(links,/MinutesViewer\.php\?clip_id=6993&amp;view_id=15/);
+ assert.match(r.el('intro').textContent,/recommended approval by 5-1/i);
+ assert.match(r.el('intro').textContent,/That recommendation is advisory/i);
  assert.match(links,/noopener noreferrer/);
  assert.doesNotMatch(links,/javascript:/i);
  assert.doesNotMatch(r.el('title').textContent,/Blackburn/);
