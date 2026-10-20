@@ -57,7 +57,7 @@ test('KNOWN DEFECT: concurrent /api/research POSTs can lose a queue entry (job s
  const store=new Map();
  const kv={async get(k,t){await new Promise(r=>setImmediate(r));const v=store.get(k);return v==null?null:(t==='json'?JSON.parse(v):v)},async put(k,v){await new Promise(r=>setImmediate(r));store.set(k,String(v))}};
  const env={TENS_PUBLIC_JOBS:kv};
- const post=()=>mod.default.fetch(new Request('https://api.asktens.com/api/research',{method:'POST',headers:{origin:'https://asktens.com','content-type':'application/json'},body:JSON.stringify({question:'Midnight Pass?'})}),env);
+ const post=()=>mod.default.fetch(new Request('https://api.asktens.com/api/research',{method:'POST',headers:{origin:'https://asktens.com','content-type':'application/json','x-tens-public-session':'12121212121212121212121212121212'},body:JSON.stringify({question:'Midnight Pass?'})}),env);
  const res=await Promise.all([post(),post(),post()]);
  const ids=await Promise.all(res.map(async r=>(await r.json()).jobId));
  const queued=JSON.parse(store.get('queue:index:v1')).map(x=>x.id);
