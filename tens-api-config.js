@@ -46,7 +46,7 @@
       const method = String(options.method || 'GET').toUpperCase();
       const headers = new Headers(options.headers || {});
       const tp = new URL(target).pathname;
-      if ((tp === '/api/research' && method === 'POST') || (tp === '/api/research/status' && method === 'GET')) {
+      if ((tp === '/api/research' && method === 'POST') || (tp === '/api/research/status' && method === 'GET') || (tp === '/api/share/create' && method === 'POST')) {
         if (!publicSession) throw new Error('PUBLIC_SESSION_UNAVAILABLE');
         headers.set('X-TENS-Public-Session', publicSession);
       }

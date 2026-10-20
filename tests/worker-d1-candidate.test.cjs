@@ -29,8 +29,8 @@ test.before(async()=>{
 });
 test.after(()=>Object.defineProperty(crypto.subtle,'verify',{configurable:true,value:origVerify}));
 
-test('flag off: identical to legacy (job goes to KV, D1 untouched)',async()=>{
- const env={TENS_PUBLIC_JOBS:kv(),DB:d1()};const r=await post(env,'Midnight Pass?');assert.equal(r.status,202);
+test('flag off: legacy KV path still works WITH session, D1 untouched',async()=>{
+ const env={TENS_PUBLIC_JOBS:kv(),DB:d1()};const r=await post(env,'Midnight Pass?',sess(1));assert.equal(r.status,202);
  assert.ok(env.TENS_PUBLIC_JOBS.m.has('queue:index:v1'));assert.equal(env.DB.raw.prepare('select count(*) c from research_jobs').get().c,0);
 });
 test('flag on but schema not migrated or D1 missing/throwing: 503, never falls back to KV',async()=>{
@@ -86,18 +86,18 @@ test('unsigned or badly signed internal calls are rejected before any state chan
 test('already-queued legacy job is not stranded: dual-read status, legacy-first claim, legacy token enforced, new writes D1-only',async()=>{
  const kvs=kv(),DB=d1();
  const legacyEnv={TENS_PUBLIC_JOBS:kvs,DB};                       // flag off: how the stuck R203WEB job was created
- const old=(await (await post(legacyEnv,'old question')).json()).jobId;
+ const old=(await (await post(legacyEnv,'old question',sess(4))).json()).jobId;
  const env={TENS_D1_QUEUE:FLAG,TENS_PUBLIC_JOBS:kvs,DB};
  const snapshot=kvs.m.get('queue:index:v1');
  const neu=(await (await post(env,'new question',sess(5))).json()).jobId;
  assert.equal(kvs.m.get('queue:index:v1'),snapshot,'legacy KV queue index must be untouched by new writes');
- assert.equal((await (await status(env,old)).json()).state,'QUEUED','legacy status still readable');
+ assert.equal((await (await status(env,old,sess(4))).json()).state,'QUEUED','legacy status still readable');
  assert.equal((await (await status(env,neu,sess(5))).json()).state,'QUEUED');
  const c1=await (await internal(env,'/internal/claim')).json();assert.equal(c1.jobId,old,'oldest (legacy) first');
  assert.equal((await internal(env,'/internal/complete',{jobId:old,claimToken:'wrong',result:good()})).status,409,'legacy token enforced by legacy');
  const c2=await (await internal(env,'/internal/claim')).json();assert.equal(c2.jobId,neu,'then D1');
  assert.equal((await internal(env,'/internal/complete',{jobId:old,claimToken:c1.claimToken,result:good()})).status,200);
- assert.equal((await (await status(env,old)).json()).state,'COMPLETE');
+ assert.equal((await (await status(env,old,sess(4))).json()).state,'COMPLETE');
  assert.equal((await internal(env,'/internal/complete',{jobId:neu,claimToken:c2.claimToken,result:good()})).status,200);
  assert.equal((await internal(env,'/internal/complete',{jobId:neu,claimToken:c1.claimToken,result:good()})).status,409);
 });
@@ -157,8 +157,9 @@ test('session-bound status: only the owning tab sees a D1 job; others get a unif
  assert.equal((await (await status(env,b,sess(52))).json()).state,'QUEUED');assert.equal((await status(env,b,sess(51))).status,404,'rotated/other session');
  assert.equal((await status(env,b)).status,404);
  assert.equal((await cand.default.fetch(new Request(API+'/api/research/status?jobId='+b,{headers:{origin:'https://evil.example','x-tens-public-session':sess(52)}}),env)).status,403);
- const legacyEnv={TENS_PUBLIC_JOBS:env.TENS_PUBLIC_JOBS,DB:d1()};const legacyId=(await (await post(legacyEnv,'legacy q')).json()).jobId;
- assert.equal((await status(env,legacyId)).status,200,'legacy-only job keeps working without a session');
+ const legacyEnv={TENS_PUBLIC_JOBS:env.TENS_PUBLIC_JOBS,DB:d1()};const legacyId=(await (await post(legacyEnv,'legacy q',sess(54))).json()).jobId;
+ assert.equal((await status(env,legacyId)).status,401,'legacy-only job also requires session');
+ assert.equal((await status(env,legacyId,sess(54))).status,200,'owning legacy session can retrieve result');
  const pre=await cand.default.fetch(new Request(API+'/api/research',{method:'OPTIONS',headers:{origin:UI,'access-control-request-method':'POST','access-control-request-headers':'x-tens-public-session'}}),env);
  assert.ok(pre.status<400&&/x-tens-public-session/i.test(pre.headers.get('access-control-allow-headers')||''));
 });

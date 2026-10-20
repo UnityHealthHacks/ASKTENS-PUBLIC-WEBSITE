@@ -50,6 +50,8 @@ jobs:
         run: node --test tests/d1-research-queue.test.cjs
       - name: Test review-only D1 worker candidate wrapper (legacy rollover, tokens, sessions)
         run: node --test tests/worker-d1-candidate.test.cjs
+      - name: Test tab-private research and explicit safe public evidence share
+        run: node --test tests/research-share-public-url-security.test.cjs
       - name: Test per-tab session header on research POST and status GET
         run: node --test tests/api-config-session-header.test.cjs
       - name: Test review-only source-backed result builder (fail-closed, attestation required)
