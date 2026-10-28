@@ -2,21 +2,6 @@ name: Business preview regression checks
 
 on:
   pull_request:
-    paths:
-      - 'business.html'
-      - 'pricing.html'
-      - 'tens-business-*.js'
-      - 'tens-researched-business-capabilities.js'
-      - 'tests/business-*.test.cjs'
-      - 'topic.html'
-      - 'tens-topic-evidence-boundary.js'
-      - 'tests/topic-evidence-boundary.test.cjs'
-      - 'tests/topic-routing-no-cross-project-fallback.test.cjs'
-      - 'browse.html'
-      - 'tests/hurley-public-source-links.test.cjs'
-      - 'backend/cloudflare-r204-review/worker.mjs'
-      - 'tests/research-cors-preflight.test.cjs'
-      - '.github/workflows/business-preview-checks.yml'
 
 permissions:
   contents: read
@@ -38,16 +23,24 @@ jobs:
         run: node --test tests/topic-evidence-boundary.test.cjs
       - name: Reject unknown topic links without cross-project fallback
         run: node --test tests/topic-routing-no-cross-project-fallback.test.cjs
+      - name: Verify synthetic topic overview source-backed marker
+        run: node --test tests/topic-overview-verified-marker.test.cjs
       - name: Test Lyons Bay source links and prevent unsupported findings
         run: node --test tests/hurley-public-source-links.test.cjs
+      - name: Test official public-source links across project subjects
+        run: node --test tests/public-official-source-links.test.cjs
       - name: Test public Q&A provider-to-guard contract
         run: node --test tests/public-qa-contract.test.cjs
       - name: Test public research CORS preflight boundaries
         run: node --test tests/research-cors-preflight.test.cjs
       - name: Test worker claim adapter contract and queued-timeout honesty
         run: node --test tests/worker-adapter-contract.test.cjs
+      - name: Test offline signed-queue mock and fail-closed receipts
+        run: node --test tests/offline-signed-queue-review.test.cjs
       - name: Test review-only D1 atomic research queue (SQLite)
         run: node --test tests/d1-research-queue.test.cjs
+      - name: Test isolated production-shape migration with synthetic SQLite rows
+        run: node --test tests/d1-production-shape-migration.test.cjs
       - name: Test review-only D1 worker candidate wrapper (legacy rollover, tokens, sessions)
         run: node --test tests/worker-d1-candidate.test.cjs
       - name: Test tab-private research and explicit safe public evidence share
@@ -62,6 +55,8 @@ jobs:
         run: node --test tests/d1-acceptance-worker.test.cjs
       - name: Test owner-local D1 acceptance invoker (offline, fail-closed)
         run: node --test tests/d1-acceptance-invoke.test.cjs
+      - name: Test owner-local D1 invoker negative cases (offline, no Cloudflare)
+        run: node --test tests/d1-acceptance-invoke-ag182-negative.test.cjs
       - name: Verify JavaScript parses
         run: |
           node --check tens-business-capabilities.js
