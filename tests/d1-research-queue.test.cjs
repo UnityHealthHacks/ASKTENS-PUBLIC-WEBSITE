@@ -123,7 +123,7 @@ test('route handler: public contract preserved; internal needs signature AND fre
 
 
 test('all cited sources require hash, unique identity, supported source type and safe HTTPS syntax',async()=>{
- const clean={evidenceId:'DOC_001',preservationVerified:true,sourceKind:'PUBLIC_WEB',url:'https://example.gov/record',contentHash:'a'.repeat(64)};
+ const clean={evidenceId:'DOC_001',preservationVerified:true,publicSafe:true,sourceKind:'PUBLIC_WEB',url:'https://example.gov/record',contentHash:'a'.repeat(64)};
  const archived={...clean,sourceKind:'ARCHIVED_PUBLIC_RECORD',url:undefined};
  const base=()=>({...good(),verified:[{statement:'Direct source finding',evidenceRefs:['DOC_001']}],sources:[clean]});
  assert.equal(Q.sourceProblem(base()),'','valid HTTPS original');
@@ -151,7 +151,7 @@ test('all cited sources require hash, unique identity, supported source type and
 });
 
 test('D1 completion rejects forged source envelopes atomically but accepts valid and UNKNOWN results',async()=>{
- const goodSource={evidenceId:'DOC_001',sourceKind:'PUBLIC_WEB',url:'https://example.gov/permit',contentHash:'c'.repeat(64),preservationVerified:true};
+ const goodSource={evidenceId:'DOC_001',sourceKind:'PUBLIC_WEB',url:'https://example.gov/permit',contentHash:'c'.repeat(64),preservationVerified:true,publicSafe:true};
  const make=sources=>({...good(),verified:[{statement:'Relevant directly sourced claim',evidenceRefs:['DOC_001']}],sources});
  const cases=[
    {name:'missing hash',sources:[{...goodSource,contentHash:undefined}],accept:false},
@@ -207,7 +207,7 @@ test('status lazily expires only the requested stale job; plain status stays a p
 // Oct 17 review-only boundary regression: do not admit coercible evidence IDs,
 // hashes, orphan sources or contradictory answer states as a completed result.
 test('reject non-string source identities and contradictory source-backed answers',()=>{
- const x={evidenceId:'DOC_001',sourceKind:'PUBLIC_WEB',url:'https://example.gov/record',contentHash:'a'.repeat(64),preservationVerified:true};
+ const x={evidenceId:'DOC_001',sourceKind:'PUBLIC_WEB',url:'https://example.gov/record',contentHash:'a'.repeat(64),preservationVerified:true,publicSafe:true};
  const envelope=(sources,verified=[],answer='UNKNOWN')=>({sources,verified,answer});
  assert.equal(Q.sourceProblem(envelope([{...x,evidenceId:['DOC_001']}])),'SOURCE_NOT_PRESERVED');
  assert.equal(Q.sourceProblem(envelope([{...x,contentHash:['a'.repeat(64)]}])),'SOURCE_HASH_MISSING');
@@ -218,10 +218,12 @@ test('reject non-string source identities and contradictory source-backed answer
  assert.equal(Q.sourceProblem(envelope([],[],'UNKNOWN')),'');
  assert.equal(Q.sourceProblem(envelope([x],[{evidenceRefs:['DOC_001']}],'VERIFIED')),'');
 });
-test('sourceProblem: explicit publicSafe/publicAccess other than true contradicts and is refused; absent flags stay compatible with builder output',()=>{
- const s0={evidenceId:'EV_PUB_1',preservationVerified:true,sourceKind:'PUBLIC_WEB',url:'https://example.gov/r.pdf',contentHash:'a'.repeat(64)};
+test('sourceProblem: explicit publicSafe/publicAccess other than true contradicts and is refused; absent publicSafe is refused',()=>{
+ const s0={evidenceId:'EV_PUB_1',preservationVerified:true,publicSafe:true,sourceKind:'PUBLIC_WEB',url:'https://example.gov/r.pdf',contentHash:'a'.repeat(64)};
  const base={...good(),verified:[{statement:'s',evidenceRefs:['EV_PUB_1']}],sources:[s0]};
  assert.equal(Q.sourceProblem(base),'');
+ assert.equal(Q.sourceProblem({...base,sources:[{...s0,publicSafe:undefined}]}),'SOURCE_NOT_PUBLIC','absent publicSafe fails closed');
+ assert.equal(Q.sourceProblem({...base,sources:[(({publicSafe,...r})=>r)(s0)]}),'SOURCE_NOT_PUBLIC','omitted key fails closed');
  for(const f of ['publicSafe','publicAccess'])for(const v of [false,'true',null,0])assert.equal(Q.sourceProblem({...base,sources:[{...s0,[f]:v}]}),'SOURCE_NOT_PUBLIC',f+String(v));
  assert.equal(Q.sourceProblem({...base,sources:[{...s0,publicSafe:true,publicAccess:true}]}),'');
  assert.equal(Q.sourceProblem({...base,answer:'UNKNOWN',verified:[]}),'SOURCE_UNCITED');

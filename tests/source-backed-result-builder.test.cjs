@@ -7,9 +7,12 @@ const B=require('../backend/adapter-contract/source-backed-result-builder.js');
 const {processOne}=require('../backend/adapter-contract/claim-adapter.js');
 const Q='What does the record establish about Midnight Pass?',HASH='b'.repeat(64);
 const job={jobId:'R203WEB_'+'x'.repeat(24),question:Q};
-const src=(o={})=>({evidenceId:'EV_1',label:'County permit',recordType:'Permit',readStatus:'READ_COMPLETE',contentHash:HASH,preservation:{verified:true,independent:true,verifier:'fixture-verifier',contentHashMatchesPreservedBytes:true},publicAccess:true,sourceKind:'PUBLIC_WEB',url:'https://example.gov/permit.pdf',...o});
+// SYNTHETIC fixture verifier only: accepts a locally forged record. It stands in for a governed issuer that does not exist yet.
+const FIXTURE_VERIFIER={verifyReleaseAttestation:x=>x.attestation&&x.attestation.fixtureOnly===true};
+const withAtt=s=>({...s,releaseAttestation:{evidenceId:s.evidenceId,contentHash:s.contentHash,scope:'PUBLIC_WEB',fixtureOnly:true}});
+const src=(o={})=>withAtt({evidenceId:'EV_1',label:'County permit',recordType:'Permit',readStatus:'READ_COMPLETE',contentHash:HASH,preservation:{verified:true,independent:true,verifier:'fixture-verifier',contentHashMatchesPreservedBytes:true},publicAccess:true,sourceKind:'PUBLIC_WEB',url:'https://example.gov/permit.pdf',...o});
 const fnd=(o={})=>({id:'F1',type:'PERMIT',statement:'Permit 4521 was issued for $12,500.',directQuote:'Permit No. 4521 issued; fee 12,500 dollars. $12,500',evidenceRefs:['EV_1'],verification:{state:'COMPLETE_VERIFIED',basis:'DIRECT_SOURCE_STATEMENT',groundingRatio:1,numbersGrounded:true},relevance:{state:'RELEVANT',questionSha256:B.sha(B.normQ(Q))},...o});
-const run=(s=[src()],f=[fnd()],extra={})=>B.build(job,{sources:s,findings:f,...extra});
+const run=(s=[src()],f=[fnd()],extra={})=>B.build(job,{sources:s,findings:f,...extra},FIXTURE_VERIFIER);
 
 test('fully attested bundle -> exact R202 result, cited, hashed, no claim beyond input',()=>{
  const r=run();assert.equal(r.ok,true);const x=r.result;
@@ -70,7 +73,7 @@ test('adapter hook: no bundle -> no result (job fails closed); good bundle compl
  const calls=[];const queue={claim:async()=>({state:'CLAIMED',jobId:job.jobId,question:Q,claimToken:'T'}),complete:async o=>{calls.push(['complete',o]);return {status:200,state:'COMPLETE_ACCEPTED'}},fail:async o=>{calls.push(['fail',o]);return {status:200,state:'FAILURE_ACCEPTED'}}};
  const base={queue,runner:{runJob:async()=>({state:'PUBLIC_RESEARCH_PASS',completionClaimAllowed:true})},activationProof:{state:'R212_PUBLIC_RESEARCH_ACTIVATION_PROOF_READY'},namespace:{}};
  assert.equal((await processOne({...base,buildResult:B.asAdapterBuilder(()=>null)})).state,'FAILED_REPORTED');assert.equal(calls[0][1].errorCode,'NO_SOURCE_BACKED_RESULT');
- assert.equal((await processOne({...base,buildResult:B.asAdapterBuilder(()=>({sources:[src()],findings:[fnd()]}))})).state,'COMPLETED');assert.equal(calls[1][0],'complete');
+ assert.equal((await processOne({...base,buildResult:B.asAdapterBuilder(()=>({sources:[src()],findings:[fnd()]}),FIXTURE_VERIFIER)})).state,'COMPLETED');assert.equal(calls[1][0],'complete');
 });
 
 test('numeric grounding refuses substring amounts and years but preserves exact numeric tokens',()=>{
@@ -100,4 +103,23 @@ test('input source with explicit publicSafe other than true is not admitted even
  assert.equal(B.sourceProblem(src),'');
  for(const v of [false,'true',null,0])assert.equal(B.sourceProblem({...src,publicSafe:v}),'SOURCE_NOT_ATTESTED_PUBLIC');
  assert.equal(B.sourceProblem({...src,publicSafe:true}),'');
+});
+
+test('release attestation gate: no verifier, missing, mismatched, revoked or unverified attestation => honest UNKNOWN; publicSafe is never copied from input',()=>{
+ const bundle=o=>({sources:[o],findings:[fnd()]});
+ const noVerifier=B.build(job,bundle(src()));assert.equal(noVerifier.ok,true);assert.equal(noVerifier.result.answer,'UNKNOWN');assert.deepEqual(noVerifier.result.sources,[]);
+ assert.ok(noVerifier.dropped.some(d=>d.reason==='RELEASE_ATTESTATION_VERIFIER_MISSING'));
+ const reasons=(o,v=FIXTURE_VERIFIER)=>B.build(job,bundle(o),v).dropped.map(d=>d.reason);
+ const plain=src();delete plain.releaseAttestation;
+ assert.ok(reasons(plain).includes('RELEASE_ATTESTATION_MISSING'));
+ assert.ok(reasons({...src(),publicSafe:true,releaseAttestation:undefined}).includes('RELEASE_ATTESTATION_MISSING'),'input publicSafe:true is not an attestation');
+ const a=src().releaseAttestation;
+ assert.ok(reasons({...src(),releaseAttestation:{...a,contentHash:'c'.repeat(64)}}).includes('RELEASE_ATTESTATION_MISMATCH'));
+ assert.ok(reasons({...src(),releaseAttestation:{...a,evidenceId:'OTHER_1'}}).includes('RELEASE_ATTESTATION_MISMATCH'));
+ assert.ok(reasons({...src(),releaseAttestation:{...a,revoked:true}}).includes('RELEASE_ATTESTATION_MISMATCH'));
+ assert.ok(reasons({...src(),releaseAttestation:{...a,scope:''}}).includes('RELEASE_ATTESTATION_MISMATCH'));
+ assert.ok(reasons(src(),{verifyReleaseAttestation:()=>false}).includes('RELEASE_ATTESTATION_UNVERIFIED'));
+ assert.ok(reasons(src(),{verifyReleaseAttestation:()=>{throw new Error('x')}}).includes('RELEASE_ATTESTATION_UNVERIFIED'));
+ assert.ok(reasons(src(),{verifyReleaseAttestation:()=>'yes'}).includes('RELEASE_ATTESTATION_UNVERIFIED'),'only literal true');
+ const ok=B.build(job,bundle(src()),FIXTURE_VERIFIER);assert.equal(ok.result.answer,'VERIFIED');assert.equal(ok.result.sources[0].publicSafe,true);
 });

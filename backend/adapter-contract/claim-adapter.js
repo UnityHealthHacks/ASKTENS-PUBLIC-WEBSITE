@@ -22,8 +22,8 @@ function sourceBackedProblems(r){
    if(seen.has(s.evidenceId))errs.push('SOURCE_DUPLICATE');seen.add(s.evidenceId);
    if(s.sourceKind!=='ARCHIVED_PUBLIC_RECORD'&&s.sourceKind!=='PUBLIC_WEB')errs.push('SOURCE_KIND_INVALID');
    if(!(s.sourceKind==='ARCHIVED_PUBLIC_RECORD'||/^https:\/\//.test(String(s.url||''))))errs.push('SOURCE_NOT_PUBLIC');
-   // Explicit public flags may be absent but must never contradict.
-   if((s.publicSafe!==undefined&&s.publicSafe!==true)||(s.publicAccess!==undefined&&s.publicAccess!==true))errs.push('SOURCE_NOT_PUBLIC');
+   // Fail closed: public display needs an explicit publicSafe:true (set only after a verified release attestation). Absent is NOT compatible.
+   if(s.publicSafe!==true||(s.publicAccess!==undefined&&s.publicAccess!==true))errs.push('SOURCE_NOT_PUBLIC');
    if(!/^[a-f0-9]{64}$/i.test(String(s.contentHash||'')))errs.push('SOURCE_HASH_MISSING');
    ids.set(s.evidenceId,s);
   }

@@ -22,7 +22,7 @@ function prepareFixture(){
  const db=new DatabaseSync(':memory:');db.exec(sql);
  const ins=db.prepare('INSERT INTO research_jobs(id,question,state,result_json,error_code,created_at,updated_at) VALUES(?,?,?,?,?,?,?)');
  for(let i=0;i<16;i++){
-  const sources=i<11?[{evidenceId:'SRC_'+i,url:'https://public.example.gov/record-'+i,contentHash:'a'.repeat(64),preservationVerified:true}]:[];
+  const sources=i<11?[{evidenceId:'SRC_'+i,url:'https://public.example.gov/record-'+i,contentHash:'a'.repeat(64),preservationVerified:true,publicSafe:true}]:[];
   const verified=i<11?[{statement:'Synthetic fixture evidence '+i,evidenceRefs:['SRC_'+i]}]:[];
   const unknowns=i>=11?[{statement:'UNKNOWN',reason:'NO_DIRECT_MATCH'}]:[];
   const result={protocol:'TENS_R202_PUBLIC_RESULT_1',state:'COMPLETE',assignmentId:'FIXTURE_'+i,answer:verified.length?'Synthetic fixture statement '+i:'UNKNOWN',verified,unknowns,sources,providerWrite:false,productionMutation:false,checkpointHash:'synthetic-fixture'};

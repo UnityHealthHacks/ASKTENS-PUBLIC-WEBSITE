@@ -112,7 +112,7 @@ test('session separation: header required, per-session active cap, other session
 });
 test('result must be exact TENS_R202 protocol and source-backed (server mirror of evidence guard)',async()=>{
  const env={TENS_D1_QUEUE:FLAG,TENS_PUBLIC_JOBS:kv(),DB:d1()};
- const src=over=>({evidenceId:'EV1',preservationVerified:true,sourceKind:'PUBLIC_WEB',contentHash:'a'.repeat(64),url:'https://example.gov/r.pdf',...over});
+ const src=over=>({evidenceId:'EV1',preservationVerified:true,publicSafe:true,sourceKind:'PUBLIC_WEB',contentHash:'a'.repeat(64),url:'https://example.gov/r.pdf',...over});
  const cases=[['protocol',good({protocol:'TENS_R204_PUBLIC_RESULT_1'}),'RESULT_SCHEMA_REJECTED'],
   ['uncited',good({verified:[{evidenceRefs:['X']}],sources:[src()]}),'RESULT_NOT_SOURCE_BACKED_VERIFIED_UNCITED'],
   ['nosrc',good({verified:[{evidenceRefs:['EV1']}],sources:[]}),'RESULT_NOT_SOURCE_BACKED_VERIFIED_UNCITED'],

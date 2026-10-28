@@ -22,7 +22,7 @@ function sourceProblem(s){
  if(!HEX64.test(String(s.contentHash||'')))return 'SOURCE_HASH_MISSING';
  const p=s.preservation;
  if(!p||p.verified!==true||p.independent!==true||!text(p.verifier)||p.contentHashMatchesPreservedBytes!==true)return 'SOURCE_PRESERVATION_NOT_ATTESTED';
- if(s.publicAccess!==true||(s.publicSafe!==undefined&&s.publicSafe!==true))return 'SOURCE_NOT_ATTESTED_PUBLIC'; // an explicit publicSafe other than true contradicts the attestation
+ if(s.publicAccess!==true||(s.publicSafe!==undefined&&s.publicSafe!==true))return 'SOURCE_NOT_ATTESTED_PUBLIC'; // publicSafe is never accepted from input as proof; see releaseProblem
  const archived=s.sourceKind==='ARCHIVED_PUBLIC_RECORD';
  if(!archived&&s.sourceKind!=='PUBLIC_WEB')return 'SOURCE_KIND_INVALID';
  if(!archived&&!publicHttps(s.url))return 'SOURCE_URL_UNSAFE';
@@ -30,6 +30,14 @@ function sourceProblem(s){
  return '';
 }
 const numbersIn=t=>(String(t).match(/\d[\d,]*(?:\.\d+)?/g)||[]).map(n=>n.replace(/,/g,''));
+function releaseProblem(s,verify){
+ if(!verify)return 'RELEASE_ATTESTATION_VERIFIER_MISSING';
+ const a=s.releaseAttestation;
+ if(!a||typeof a!=='object')return 'RELEASE_ATTESTATION_MISSING';
+ if(a.evidenceId!==s.evidenceId||String(a.contentHash||'').toLowerCase()!==String(s.contentHash).toLowerCase()||!text(a.scope)||a.revoked===true)return 'RELEASE_ATTESTATION_MISMATCH';
+ let ok=false;try{ok=verify({evidenceId:s.evidenceId,contentHash:String(s.contentHash).toLowerCase(),scope:a.scope,attestation:a})===true}catch{ok=false}
+ return ok?'':'RELEASE_ATTESTATION_UNVERIFIED';
+}
 /** Why a finding is not admissible, or ''. `sources` is a Map of admitted evidenceId -> source. */
 function findingProblem(f,sources,qHash){
  if(!f||typeof f!=='object')return 'FINDING_MALFORMED';
@@ -51,16 +59,20 @@ function findingProblem(f,sources,qHash){
  * @param {{sources:object[],findings:object[],unknowns?:object[],noMatch?:boolean}} bundle already-verified evidence
  * @returns {{ok:true,result:object,dropped:object[]}|{ok:false,reason:string}}
  */
-function build(job,bundle){
+// A public-release attestation is a SEPARATE governed record from publicAccess (reachable) and preservation (bytes kept).
+// It is bound to evidenceId+contentHash+scope and verified by an INJECTED verifier. With no verifier nothing is admitted
+// (honest UNKNOWN). publicSafe:true is emitted only for a source the verifier accepted; it is never copied from input.
+function build(job,bundle,opts){
+ const verifyRelease=opts&&typeof opts.verifyReleaseAttestation==='function'?opts.verifyReleaseAttestation:null;
  if(!job||!text(job.jobId)||!text(job.question))return {ok:false,reason:'JOB_REQUIRED'};
  if(!bundle||!Array.isArray(bundle.sources)||!Array.isArray(bundle.findings))return {ok:false,reason:'BUNDLE_REQUIRED'};
  const qHash=sha(normQ(job.question)),dropped=[];
  const admitted=new Map();
- for(const s of bundle.sources){const p=sourceProblem(s);if(p)dropped.push({kind:'source',id:s&&s.evidenceId||null,reason:p});else if(admitted.has(s.evidenceId))dropped.push({kind:'source',id:s.evidenceId,reason:'SOURCE_DUPLICATE'});else admitted.set(s.evidenceId,s)}
+ for(const s of bundle.sources){let p=sourceProblem(s);if(!p)p=releaseProblem(s,verifyRelease);if(p)dropped.push({kind:'source',id:s&&s.evidenceId||null,reason:p});else if(admitted.has(s.evidenceId))dropped.push({kind:'source',id:s.evidenceId,reason:'SOURCE_DUPLICATE'});else admitted.set(s.evidenceId,s)}
  const kept=[];
  for(const f of bundle.findings){const p=findingProblem(f,admitted,qHash);if(p)dropped.push({kind:'finding',id:f&&f.id||null,reason:p});else kept.push(f)}
  const used=new Set(kept.flatMap(f=>f.evidenceRefs));
- const sources=[...admitted.values()].filter(s=>used.has(s.evidenceId)).map(s=>({evidenceId:s.evidenceId,preservationVerified:true,sourceKind:s.sourceKind,label:s.label.trim(),recordType:s.recordType.trim(),contentHash:s.contentHash.toLowerCase(),...(s.url?{url:s.url}:{}),...(text(s.documentDate)?{documentDate:s.documentDate.trim()}:{}),...(text(s.authority)?{authority:s.authority.trim()}:{})}));
+ const sources=[...admitted.values()].filter(s=>used.has(s.evidenceId)).map(s=>({evidenceId:s.evidenceId,preservationVerified:true,publicSafe:true,sourceKind:s.sourceKind,label:s.label.trim(),recordType:s.recordType.trim(),contentHash:s.contentHash.toLowerCase(),...(s.url?{url:s.url}:{}),...(text(s.documentDate)?{documentDate:s.documentDate.trim()}:{}),...(text(s.authority)?{authority:s.authority.trim()}:{})}));
  const verified=kept.map(f=>({type:text(f.type)||'RECORD',statement:f.statement.trim(),evidenceRefs:[...f.evidenceRefs],evidenceAnswer:text(f.evidenceAnswer)||f.directQuote.trim()}));
  const unknowns=(Array.isArray(bundle.unknowns)?bundle.unknowns:[]).filter(u=>u&&text(u.statement)&&UNKNOWN_REASONS.has(u.reason)).map(u=>({type:text(u.type)||'UNRESOLVED',statement:u.statement.trim(),reason:u.reason}));
  // Nothing admissible -> honest UNKNOWN, never a claim. Dropped items are surfaced as gaps, not hidden.
@@ -77,14 +89,14 @@ function build(job,bundle){
 function selfCheck(r){
  if(r.protocol!==PROTOCOL||r.state!=='COMPLETE'||r.providerWrite!==false||r.productionMutation!==false)return 'ENVELOPE';
  const ids=new Set(r.sources.map(s=>s.evidenceId));
- if(r.sources.some(s=>s.preservationVerified!==true||!HEX64.test(s.contentHash)))return 'SOURCE';
+ if(r.sources.some(s=>s.preservationVerified!==true||s.publicSafe!==true||!HEX64.test(s.contentHash)))return 'SOURCE';
  if(r.verified.some(v=>!v.evidenceRefs.length||!v.evidenceRefs.every(i=>ids.has(i))))return 'CITATION';
  if(r.answer==='VERIFIED'&&!r.verified.length)return 'EMPTY_VERIFIED';
  if(r.answer==='UNKNOWN'&&(r.verified.length||r.sources.length))return 'UNKNOWN_WITH_CLAIMS';
  return '';
 }
 /** Adapter hook for claim-adapter.processOne: getBundle(job,proof) must return already-verified evidence or null. */
-function asAdapterBuilder(getBundle){
- return (job,proof)=>{const b=typeof getBundle==='function'?getBundle(job,proof):null;if(!b)return null;const r=build(job,b);return r.ok?r.result:null};
+function asAdapterBuilder(getBundle,opts){
+ return (job,proof)=>{const b=typeof getBundle==='function'?getBundle(job,proof):null;if(!b)return null;const r=build(job,b,opts);return r.ok?r.result:null};
 }
-module.exports={build,asAdapterBuilder,sourceProblem,findingProblem,selfCheck,PROTOCOL,normQ,sha};
+module.exports={build,asAdapterBuilder,sourceProblem,releaseProblem,findingProblem,selfCheck,PROTOCOL,normQ,sha};
