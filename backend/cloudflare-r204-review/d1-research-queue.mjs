@@ -24,6 +24,8 @@ export function sourceProblem(r){
  for(const x of r.sources){
   if(!x||typeof x.evidenceId!=='string'||!EVIDENCE_ID.test(x.evidenceId)||x.preservationVerified!==true)return 'SOURCE_NOT_PRESERVED';
   if(ids.has(x.evidenceId))return 'SOURCE_DUPLICATE';
+  // Optional public flags may be absent (builder output omits them) but must never contradict: only literal true is compatible.
+  if((x.publicSafe!==undefined&&x.publicSafe!==true)||(x.publicAccess!==undefined&&x.publicAccess!==true))return 'SOURCE_NOT_PUBLIC';
   if(typeof x.contentHash!=='string'||!HEX64.test(x.contentHash))return 'SOURCE_HASH_MISSING';
   if(x.sourceKind!=='PUBLIC_WEB'&&x.sourceKind!=='ARCHIVED_PUBLIC_RECORD')return 'SOURCE_KIND_INVALID';
   if(x.sourceKind==='PUBLIC_WEB'&&!safeHttpsSourceUrl(x.url))return 'SOURCE_NOT_PUBLIC';

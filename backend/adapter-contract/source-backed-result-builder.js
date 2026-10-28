@@ -22,7 +22,7 @@ function sourceProblem(s){
  if(!HEX64.test(String(s.contentHash||'')))return 'SOURCE_HASH_MISSING';
  const p=s.preservation;
  if(!p||p.verified!==true||p.independent!==true||!text(p.verifier)||p.contentHashMatchesPreservedBytes!==true)return 'SOURCE_PRESERVATION_NOT_ATTESTED';
- if(s.publicAccess!==true)return 'SOURCE_NOT_ATTESTED_PUBLIC';
+ if(s.publicAccess!==true||(s.publicSafe!==undefined&&s.publicSafe!==true))return 'SOURCE_NOT_ATTESTED_PUBLIC'; // an explicit publicSafe other than true contradicts the attestation
  const archived=s.sourceKind==='ARCHIVED_PUBLIC_RECORD';
  if(!archived&&s.sourceKind!=='PUBLIC_WEB')return 'SOURCE_KIND_INVALID';
  if(!archived&&!publicHttps(s.url))return 'SOURCE_URL_UNSAFE';

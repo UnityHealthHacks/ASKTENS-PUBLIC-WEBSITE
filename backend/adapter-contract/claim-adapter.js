@@ -15,16 +15,27 @@ function sourceBackedProblems(r){
  const errs=[];if(!resultOk(r))return ['RESULT_SCHEMA'];
  if(JSON.stringify(r).length>MAX_RESULT_BYTES)errs.push('RESULT_TOO_LARGE');
  const ids=new Map();
+ const seen=new Set();
  for(const s of r.sources){
   if(!s||typeof s.evidenceId!=='string'||s.preservationVerified!==true)errs.push('SOURCE_NOT_PRESERVED');
   else{
+   if(seen.has(s.evidenceId))errs.push('SOURCE_DUPLICATE');seen.add(s.evidenceId);
+   if(s.sourceKind!=='ARCHIVED_PUBLIC_RECORD'&&s.sourceKind!=='PUBLIC_WEB')errs.push('SOURCE_KIND_INVALID');
    if(!(s.sourceKind==='ARCHIVED_PUBLIC_RECORD'||/^https:\/\//.test(String(s.url||''))))errs.push('SOURCE_NOT_PUBLIC');
+   // Explicit public flags may be absent but must never contradict.
+   if((s.publicSafe!==undefined&&s.publicSafe!==true)||(s.publicAccess!==undefined&&s.publicAccess!==true))errs.push('SOURCE_NOT_PUBLIC');
    if(!/^[a-f0-9]{64}$/i.test(String(s.contentHash||'')))errs.push('SOURCE_HASH_MISSING');
    ids.set(s.evidenceId,s);
   }
  }
  if(r.verified.length&&!r.sources.length)errs.push('VERIFIED_WITHOUT_SOURCE');
- for(const v of r.verified){if(!Array.isArray(v?.evidenceRefs)||!v.evidenceRefs.length||!v.evidenceRefs.every(id=>ids.has(id)))errs.push('VERIFIED_UNCITED')}
+ const cited=new Set();
+ for(const v of r.verified){if(!Array.isArray(v?.evidenceRefs)||!v.evidenceRefs.length||!v.evidenceRefs.every(id=>ids.has(id)))errs.push('VERIFIED_UNCITED');else v.evidenceRefs.forEach(i=>cited.add(i))}
+ // No orphan source cards, and the declared answer must agree with the findings.
+ if(r.sources.length&&!r.verified.length)errs.push('SOURCE_UNCITED');
+ if(r.sources.some(s=>s&&typeof s.evidenceId==='string'&&!cited.has(s.evidenceId))&&r.verified.length)errs.push('SOURCE_UNCITED');
+ if(r.answer==='UNKNOWN'&&(r.verified.length||r.sources.length))errs.push('ANSWER_CONFLICT');
+ if(r.answer==='VERIFIED'&&!r.verified.length)errs.push('ANSWER_CONFLICT');
  return [...new Set(errs)];
 }
 

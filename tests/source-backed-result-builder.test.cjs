@@ -94,3 +94,10 @@ test('numeric grounding refuses substring amounts and years but preserves exact 
   if(!c.allow)assert.ok(r.dropped.some(x=>x.reason==='FINDING_NUMBER_NOT_IN_QUOTE'),c.statement+' | '+c.quote);
  }
 });
+test('input source with explicit publicSafe other than true is not admitted even with publicAccess:true',()=>{
+ const B=require('../backend/adapter-contract/source-backed-result-builder.js');
+ const src={evidenceId:'EV_PUB_1',label:'L',recordType:'R',readStatus:'READ_COMPLETE',contentHash:'a'.repeat(64),preservation:{verified:true,independent:true,verifier:'v',contentHashMatchesPreservedBytes:true},publicAccess:true,sourceKind:'PUBLIC_WEB',url:'https://example.gov/r.pdf'};
+ assert.equal(B.sourceProblem(src),'');
+ for(const v of [false,'true',null,0])assert.equal(B.sourceProblem({...src,publicSafe:v}),'SOURCE_NOT_ATTESTED_PUBLIC');
+ assert.equal(B.sourceProblem({...src,publicSafe:true}),'');
+});

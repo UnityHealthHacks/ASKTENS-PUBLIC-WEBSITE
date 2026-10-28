@@ -218,3 +218,11 @@ test('reject non-string source identities and contradictory source-backed answer
  assert.equal(Q.sourceProblem(envelope([],[],'UNKNOWN')),'');
  assert.equal(Q.sourceProblem(envelope([x],[{evidenceRefs:['DOC_001']}],'VERIFIED')),'');
 });
+test('sourceProblem: explicit publicSafe/publicAccess other than true contradicts and is refused; absent flags stay compatible with builder output',()=>{
+ const s0={evidenceId:'EV_PUB_1',preservationVerified:true,sourceKind:'PUBLIC_WEB',url:'https://example.gov/r.pdf',contentHash:'a'.repeat(64)};
+ const base=good({verified:[{statement:'s',evidenceRefs:['EV_PUB_1']}],sources:[s0]});
+ assert.equal(Q.sourceProblem(base),'');
+ for(const f of ['publicSafe','publicAccess'])for(const v of [false,'true',null,0])assert.equal(Q.sourceProblem({...base,sources:[{...s0,[f]:v}]}),'SOURCE_NOT_PUBLIC',f+String(v));
+ assert.equal(Q.sourceProblem({...base,sources:[{...s0,publicSafe:true,publicAccess:true}]}),'');
+ assert.equal(Q.sourceProblem({...base,answer:'UNKNOWN',verified:[]}),'SOURCE_UNCITED');
+});

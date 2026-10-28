@@ -17,7 +17,7 @@ function fakeQueue(jobs){
 }
 const passProof={state:'PUBLIC_RESEARCH_PASS',completionClaimAllowed:true};
 const goodResult=()=>({protocol:'TENS_R202_PUBLIC_RESULT_1',state:'COMPLETE',providerWrite:false,productionMutation:false,assignmentId:'ASSIGN_1',checkpointHash:'c',
- verified:[{statement:'s',evidenceRefs:['E1']}],unknowns:[],sources:[{evidenceId:'E1',preservationVerified:true,url:'https://example.gov/r.pdf',contentHash:HASH}]});
+ verified:[{statement:'s',evidenceRefs:['E1']}],unknowns:[],sources:[{evidenceId:'E1',preservationVerified:true,sourceKind:'PUBLIC_WEB',url:'https://example.gov/r.pdf',contentHash:HASH}]});
 const mk=(over={})=>{const q=fakeQueue([{id:'R203WEB_'+'x'.repeat(24),question:'q'}]);return {q,d:{queue:q,runner:{runJob:async()=>passProof},buildResult:()=>goodResult(),activationProof:proofOk,namespace:{},...over}}};
 
 test('unbound adapter never claims a job (job stays QUEUED)',async()=>{
@@ -138,4 +138,16 @@ test('missing required claim fields return CLAIM_MALFORMED without worker run',a
   const m=mk();m.d.queue.claim=async()=>payload;
   const v=await processOne(m.d);assert.equal(v.state,'CLAIM_MALFORMED');
  }
+});test('source contract: contradictory public flags, UNKNOWN-with-sources, orphan sources and duplicate ids are rejected; absent flags stay compatible',()=>{
+ const {sourceBackedProblems}=require('../backend/adapter-contract/claim-adapter.js');
+ const ok=goodResult();assert.deepEqual(sourceBackedProblems(ok),[]);
+ const src=(o={})=>({...ok.sources[0],...o});
+ for(const flag of ['publicSafe','publicAccess'])for(const v of [false,'true',null,0])assert.ok(sourceBackedProblems({...ok,sources:[src({[flag]:v})]}).includes('SOURCE_NOT_PUBLIC'),flag+String(v));
+ assert.deepEqual(sourceBackedProblems({...ok,sources:[src({publicSafe:true,publicAccess:true})]}),[]);
+ assert.ok(sourceBackedProblems({...ok,answer:'UNKNOWN'}).includes('ANSWER_CONFLICT'));
+ assert.ok(sourceBackedProblems({...ok,verified:[],unknowns:[{statement:'u',reason:'NO_INDEX_MATCH'}]}).includes('SOURCE_UNCITED'));
+ assert.ok(sourceBackedProblems({...ok,sources:[src(),src({evidenceId:'E2'})]}).includes('SOURCE_UNCITED'),'orphan card');
+ assert.ok(sourceBackedProblems({...ok,sources:[src(),src()]}).includes('SOURCE_DUPLICATE'));
+ assert.ok(sourceBackedProblems({...ok,sources:[src({sourceKind:'WEIRD'})]}).includes('SOURCE_KIND_INVALID'));
+ assert.deepEqual(sourceBackedProblems({...ok,answer:'UNKNOWN',verified:[],sources:[],unknowns:[{statement:'u',reason:'NO_INDEX_MATCH'}]}),[],'valid evidence-free UNKNOWN');
 });
