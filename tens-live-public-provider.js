@@ -119,9 +119,10 @@ function spanishUnknownText(u,query){
 function transform(x,language='en',query=''){
  const lang=String(language||'en').toLowerCase()==='es'?'es':'en';
  const result=x.result,protocol=String(result?.protocol||'');if(!result||!/^TENS_R\d+_PUBLIC_RESULT_1$/.test(protocol)||result.providerWrite!==false||result.productionMutation!==false)throw new Error('PUBLIC_RESULT_INVALID');
+ if(!Array.isArray(result.sources)||result.sources.some(s=>!s||s.publicSafe!==true))throw new Error('PUBLIC_RELEASE_NOT_ATTESTED');
  const sources=(result.sources||[]).filter(s=>s&&s.evidenceId&&s.preservationVerified===true&&(s.url||s.sourceKind==='ARCHIVED_PUBLIC_RECORD')).map(s=>{
   const archived=s.sourceKind==='ARCHIVED_PUBLIC_RECORD';let host=lang==='es'?'Fuente web pública':'Public web source';if(!archived){try{host=new URL(s.url).hostname}catch{}}
-  const derived=String(s.authority||'')==='TENS_VERIFIED_DERIVED_CASE_SUMMARY',recordType=lang==='es'?(derived?'Resumen de caso derivado y verificado':(archived?'Registro público archivado':'Evidencia web pública')):(derived?'Verified derived case summary':String(s.recordType||(archived?'Archived public record':'Public web evidence')));return{id:sourceId(s.evidenceId),occurrenceId:'OCC_'+sourceId(s.evidenceId),label:String(s.label||host),recordType,provenanceStatus:'verified',publicSafe:true,url:archived?'':String(s.url||''),contentHash:s.contentHash||null,sourceKind:derived?'DERIVED_CASE_SUMMARY':(archived?'ARCHIVED_PUBLIC_RECORD':'PUBLIC_WEB'),authority:String(s.authority||'')};
+  const derived=String(s.authority||'')==='TENS_VERIFIED_DERIVED_CASE_SUMMARY',recordType=lang==='es'?(derived?'Resumen de caso derivado y verificado':(archived?'Registro público archivado':'Evidencia web pública')):(derived?'Verified derived case summary':String(s.recordType||(archived?'Archived public record':'Public web evidence')));return{id:sourceId(s.evidenceId),occurrenceId:'OCC_'+sourceId(s.evidenceId),label:String(s.label||host),recordType,provenanceStatus:'verified',publicSafe:s.publicSafe,url:archived?'':String(s.url||''),contentHash:s.contentHash||null,sourceKind:derived?'DERIVED_CASE_SUMMARY':(archived?'ARCHIVED_PUBLIC_RECORD':'PUBLIC_WEB'),authority:String(s.authority||'')};
  });
  const smap=new Map(sources.map(s=>[s.id,s]));
  const verified=(result.verified||[]).map((v,i)=>{

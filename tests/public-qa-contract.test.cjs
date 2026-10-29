@@ -11,7 +11,7 @@ const SRC_URL='https://www.example.gov/records/midnight-pass-permit.pdf';
 function completeState(over={}){
  const result=Object.assign({protocol:'TENS_R204_PUBLIC_RESULT_1',providerWrite:false,productionMutation:false,assignmentId:'ASSIGN_1',answer:'Verified answer',
   verified:[{type:'RECORD',statement:'Question requested: A permit record is on file.',evidenceRefs:['E1'],evidenceAnswer:'permit on file'}],unknowns:[],
-  sources:[{evidenceId:'E1',preservationVerified:true,url:SRC_URL,label:'County permit',contentHash:'a'.repeat(64),sourceKind:'PUBLIC_WEB'}]},over);
+  sources:[{evidenceId:'E1',preservationVerified:true,publicSafe:true,url:SRC_URL,label:'County permit',contentHash:'a'.repeat(64),sourceKind:'PUBLIC_WEB'}]},over);
  return {state:'COMPLETE',result,audit:{searchEventId:'EVT1',indexVersion:'1',rulesetVersion:'1',resultState:'COMPLETE'}};
 }
 async function ask(statusBody,{startStatus=202}={}){
@@ -66,8 +66,15 @@ test('verified finding citing a missing source is blocked',async()=>{
  assert.equal(result.tensState,'REJECTED');assert.equal(result.verified.length,0);
 });
 test('unpreserved source is not presented as verified',async()=>{
- const {result}=await ask(completeState({sources:[{evidenceId:'E1',preservationVerified:false,url:SRC_URL,contentHash:'a'.repeat(64)}]}));
+ const {result}=await ask(completeState({sources:[{evidenceId:'E1',preservationVerified:false,publicSafe:true,url:SRC_URL,contentHash:'a'.repeat(64)}]}));
  assert.equal(result.tensState,'REJECTED');assert.equal(result.verified.length,0);
+});
+test('a missing or nonliteral public release flag is rejected at the browser provider boundary',async()=>{
+ for(const flag of [false,null,'true','ABSENT']){
+  const source={...completeState().result.sources[0]};
+  if(flag==='ABSENT')delete source.publicSafe;else source.publicSafe=flag;
+  await assert.rejects(ask(completeState({sources:[source]})),/PUBLIC_RELEASE_NOT_ATTESTED/);
+ }
 });
 test('backend FAILED and queue rejection surface as errors, not answers',async()=>{
  await assert.rejects(ask({state:'FAILED',errorCode:'X'}),/TENS_RESEARCH_HOLD_X/);
