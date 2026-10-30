@@ -119,9 +119,10 @@ function spanishUnknownText(u,query){
 function transform(x,language='en',query=''){
  const lang=String(language||'en').toLowerCase()==='es'?'es':'en';
  const result=x.result,protocol=String(result?.protocol||'');if(!result||!/^TENS_R\d+_PUBLIC_RESULT_1$/.test(protocol)||result.providerWrite!==false||result.productionMutation!==false)throw new Error('PUBLIC_RESULT_INVALID');
+ if(!Array.isArray(result.sources)||result.sources.some(s=>!s||s.publicSafe!==true))throw new Error('PUBLIC_RELEASE_NOT_ATTESTED');
  const sources=(result.sources||[]).filter(s=>s&&s.evidenceId&&s.preservationVerified===true&&(s.url||s.sourceKind==='ARCHIVED_PUBLIC_RECORD')).map(s=>{
   const archived=s.sourceKind==='ARCHIVED_PUBLIC_RECORD';let host=lang==='es'?'Fuente web pública':'Public web source';if(!archived){try{host=new URL(s.url).hostname}catch{}}
-  const derived=String(s.authority||'')==='TENS_VERIFIED_DERIVED_CASE_SUMMARY',recordType=lang==='es'?(derived?'Resumen de caso derivado y verificado':(archived?'Registro público archivado':'Evidencia web pública')):(derived?'Verified derived case summary':String(s.recordType||(archived?'Archived public record':'Public web evidence')));return{id:sourceId(s.evidenceId),occurrenceId:'OCC_'+sourceId(s.evidenceId),label:String(s.label||host),recordType,provenanceStatus:'verified',publicSafe:true,url:archived?'':String(s.url||''),contentHash:s.contentHash||null,sourceKind:derived?'DERIVED_CASE_SUMMARY':(archived?'ARCHIVED_PUBLIC_RECORD':'PUBLIC_WEB'),authority:String(s.authority||'')};
+  const derived=String(s.authority||'')==='TENS_VERIFIED_DERIVED_CASE_SUMMARY',recordType=lang==='es'?(derived?'Resumen de caso derivado y verificado':(archived?'Registro público archivado':'Evidencia web pública')):(derived?'Verified derived case summary':String(s.recordType||(archived?'Archived public record':'Public web evidence')));return{id:sourceId(s.evidenceId),occurrenceId:'OCC_'+sourceId(s.evidenceId),label:String(s.label||host),recordType,provenanceStatus:'verified',publicSafe:s.publicSafe,url:archived?'':String(s.url||''),contentHash:s.contentHash||null,sourceKind:derived?'DERIVED_CASE_SUMMARY':(archived?'ARCHIVED_PUBLIC_RECORD':'PUBLIC_WEB'),authority:String(s.authority||'')};
  });
  const smap=new Map(sources.map(s=>[s.id,s]));
  const verified=(result.verified||[]).map((v,i)=>{
@@ -132,11 +133,18 @@ function transform(x,language='en',query=''){
  const limited=unknown.length>0;
  let answer;
  if(result.answer==='UNKNOWN')answer=lang==='es'?'TENS no pudo verificar una respuesta con la evidencia admitida para esta investigación.':'TENS could not verify an answer from the evidence admitted for this assignment.';
+ // "VERIFIED" is a machine status marker, never a human-readable answer.
+ // Only a finding with an admitted source may supply the displayed answer text.
+ else if(result.answer==='VERIFIED'){
+  const cited=verified.find(v=>v.sourceIds.length&&String(v.text||'').trim());
+  answer=cited?.text||(lang==='es'?'TENS no pudo verificar una respuesta con la evidencia admitida para esta investigación.':'TENS could not verify an answer from the evidence admitted for this assignment.');
+ }
  else if(lang==='es')answer=verified[0]?.text?.replace(/\s+—\s+Declaración directa de evidencia preservada\.$/,'')||(verified.length===1?'TENS encontró 1 hallazgo verificado relevante para esta pregunta.':`TENS encontró ${verified.length} hallazgos verificados relevantes para esta pregunta.`);
  else answer=answerText(result.answer);
  const proposal=result.prrProposal&&result.prrProposal.state==='AWAITING_HUMAN_APPROVAL'&&result.prrProposal.providerWrite===false&&result.prrProposal.automaticRelease===false&&result.prrProposal.humanApprovalRequired===true?result.prrProposal:null;
  return {plainAnswer:answer,scopeLabel:lang==='es'?'Investigación pública de TENS — evidencia sujeta a verificación':'Live TENS public research — proof-bound evidence',verified,inference:[],unknown,sources,limitations:lang==='es'?['TENS devuelve únicamente conclusiones respaldadas por evidencia preservada.','DESCONOCIDO significa que la evidencia disponible no cumplió las reglas de verificación; no prueba que el hecho subyacente sea falso.']:['TENS returns only proof-bound conclusions from preserved evidence.','UNKNOWN means the available evidence did not satisfy the verification rules; it is not proof that the underlying fact is false.'],actions:proposal?(lang==='es'?['TENS encontró una brecha de evidencia que coincide con un borrador de solicitud de registros pendiente de aprobación. Revise el borrador antes de cualquier envío.']:['TENS found an evidence gap that matches a draft public-records request awaiting approval. Review the draft before any submission.']):limited?(lang==='es'?['Aclare la pregunta o inténtelo de nuevo cuando haya más evidencia pública disponible.']:['Refine the question or try again as additional public evidence becomes available.']):(lang==='es'?['Abra los registros de respaldo para revisar la ruta de evidencia.']:['Open the supporting source records to inspect the evidence trail.']),prrProposal:proposal,presentationLanguage:lang,audit:{searchEventId:result.assignmentId,indexVersion:'TENS_LIVE_PUBLIC',adapterVersion:'PUBLIC_ADAPTER',rulesetVersion:'TENS_TRUTH_CONTRACT',environment:'PRODUCTION',resultState:limited?'COMPLETE_WITH_LIMITATIONS':'COMPLETE'}};
 }
+const QUEUE_NOTICE_MS=10000,QUEUE_WAIT_LIMIT_MS=45000;
 const provider=Object.freeze({version:'4.2.0-live-proof-i18n',scopeLabel:'Live TENS public research — proof-bound evidence',async search(query,options={}){
  if(!window.TENS_API||window.TENS_API.error)throw new Error(window.TENS_API?.error||'TENS_API_NOT_READY');
  const emit=typeof options.emitStatus==='function'?options.emitStatus:()=>{},lang=String(options.language||'en').toLowerCase()==='es'?'es':'en',original=String(query||'').trim();
@@ -144,12 +152,19 @@ const provider=Object.freeze({version:'4.2.0-live-proof-i18n',scopeLabel:'Live T
  const start=await window.TENS_API.fetch('/api/research',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:original})});
  if(start.status!==202)throw new Error('TENS_QUEUE_REJECTED_'+start.status);
  const queued=await start.json();if(!queued.jobId)throw new Error('TENS_JOB_ID_MISSING');
+ const startedAt=Date.now();let waitingNoted=false;
  for(let i=0;i<150;i++){
   await sleep(i<5?500:900);
   const res=await window.TENS_API.fetch('/api/research/status?jobId='+encodeURIComponent(queued.jobId));if(!res.ok)throw new Error('TENS_STATUS_'+res.status);
   const state=await res.json();
   if(state.state==='COMPLETE'){emit({eventType:'TENS_COMPLETE',message:lang==='es'?'TENS completó la revisión de evidencia.':'TENS completed the proof-bound evidence review.'});return transform(state,lang,original)}
   if(state.state==='FAILED')throw new Error('TENS_RESEARCH_HOLD_'+String(state.errorCode||'UNKNOWN'));
+  if(state.state==='QUEUED'){
+   const waited=Date.now()-startedAt;
+   if(waited>=QUEUE_WAIT_LIMIT_MS)throw new Error('TENS_WORKER_UNAVAILABLE');
+   if(waited>=QUEUE_NOTICE_MS&&!waitingNoted){waitingNoted=true;emit({eventType:'TENS_QUEUE_WAITING',message:lang==='es'?'La pregunta sigue en cola; todavía no hay un investigador disponible…':'Your question is still queued; no research worker has picked it up yet…'})}
+   continue;
+  }
   if(i===6)emit({eventType:'TENS_WORKING',message:lang==='es'?'TENS está investigando la evidencia y comprobando la corroboración…':'TENS is investigating the evidence and checking corroboration…'});
  }
  throw new Error('TENS_RESEARCH_TIMEOUT');
