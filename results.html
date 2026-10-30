@@ -46,6 +46,7 @@ function plain(r){if(r.plainAnswer!==undefined&&r.plainAnswer!==null)return Stri
 function acknowledge(q,r,businessMode){
  const l=lang()==='es';
  if(businessMode)return l?'Entiendo lo que quieres evaluar. Aquí tienes lo que TENS puede respaldar hoy, y lo que aún requeriría conexión o autorización.':'I understand what you want to evaluate. Here is what TENS can support today, and what would still require connection or authorization.';
+ if(r?.tensState==='REJECTED')return l?'TENS rechazó el resultado porque no superó las comprobaciones de evidencia. No se presenta como un hecho verificado.':'TENS rejected the result because it did not pass evidence validation. It is not being presented as a verified fact.';
  if(r?.tensState==='VALIDATED'&&Array.isArray(r.verified)&&r.verified.length>0)return l?'Entiendo tu pregunta. Revisé la evidencia disponible y esto es lo que puedo respaldar ahora:':'I understand your question. I checked the available evidence, and this is what I can support right now:';
  return l?'Entiendo tu pregunta. Revisé la evidencia disponible, pero todavía no puedo respaldar una respuesta completa como hecho establecido.':'I understand your question. I checked the available evidence, but I cannot yet support a complete answer as an established fact.';
 }
