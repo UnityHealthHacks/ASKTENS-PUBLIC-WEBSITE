@@ -90,3 +90,10 @@ test('public evidence URL guard refuses insecure, relative and credential-bearin
  assert.equal(accepts('https://agency.gov/report.pdf'),true);
  for(const url of ['http://agency.gov/report.pdf','/source','https://name:pass@agency.gov/source','https://agency.gov/report.pdf#credential','https://agency.gov:8443/report','javascript:alert(1)','https://localhost/source'])assert.equal(accepts(url),false,url);
 });
+
+test('results page evidence anchors do not send the question URL as referrer',()=>{
+ const html=load('results.html');
+ const anchors=[...html.matchAll(/target="_blank" rel="noopener noreferrer"/g)];
+ assert(anchors.length>=3,'all evidence/share anchors must refuse referrer data');
+ assert(!html.includes('target="_blank" rel="noopener"'),'no legacy referrer-leaking evidence anchor');
+});
