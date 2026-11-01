@@ -40,8 +40,10 @@ jobs:
       - name: Test review-only D1 atomic research queue (SQLite)
         run: node --test tests/d1-research-queue.test.cjs
       - name: Test isolated production-shape migration with synthetic SQLite rows
+        if: ${{ always() && !cancelled() }}
         run: node --test tests/d1-production-shape-migration.test.cjs
       - name: Test review-only D1 worker candidate wrapper (legacy rollover, tokens, sessions)
+        if: ${{ always() && !cancelled() }}
         run: node --test tests/worker-d1-candidate.test.cjs
       - name: Test tab-private research and explicit safe public evidence share
         # Run independently even if the earlier D1 test fails; keep the overall job red.
@@ -57,23 +59,32 @@ jobs:
         if: ${{ always() && !cancelled() }}
         run: node --test tests/d1-acceptance-harness.test.cjs
       - name: Test review-only D1 acceptance Worker entrypoint (fail-closed, offline)
+        if: ${{ always() && !cancelled() }}
         run: node --test tests/d1-acceptance-worker.test.cjs
       - name: Test owner-local D1 acceptance invoker (offline, fail-closed)
+        if: ${{ always() && !cancelled() }}
         run: node --test tests/d1-acceptance-invoke.test.cjs
       - name: Test owner-local D1 invoker negative cases (offline, no Cloudflare)
+        if: ${{ always() && !cancelled() }}
         run: node --test tests/d1-acceptance-invoke-ag182-negative.test.cjs
       - name: Verify JavaScript parses
+        if: ${{ always() && !cancelled() }}
         run: |
           node --check tens-business-capabilities.js
           node --check tens-business-free-assessment.js
           node --check tens-business-work-client.js
       - name: Test free business preview policy
+        if: ${{ always() && !cancelled() }}
         run: node tests/business-preview-no-false-ready.test.cjs
       - name: Test opt-in preview to quote handoff
+        if: ${{ always() && !cancelled() }}
         run: node tests/business-preview-quote-handoff.test.cjs
       - name: Test actual business registry in browser mock
+        if: ${{ always() && !cancelled() }}
         run: node tests/business-preview-real-registry.test.cjs
       - name: Test rejected and missing organization sessions
+        if: ${{ always() && !cancelled() }}
         run: node tests/business-work-client-authorization.test.cjs
       - name: Exercise mobile browser assessment and quote handoff in Chromium
+        if: ${{ always() && !cancelled() }}
         run: node tests/business-preview-headless-browser.test.cjs
