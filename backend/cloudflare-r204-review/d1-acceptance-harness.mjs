@@ -62,6 +62,10 @@ export async function classifyBinding(db,approval,{now}){
 
 const ID=(run,n)=>`R203WEB_ACPT${run}${String(n).padStart(8,'0')}`; // matches Q.jobIdOk, never collides with real R203WEB_<32hex>
 const GOOD={protocol:'TENS_R202_PUBLIC_RESULT_1',state:'COMPLETE',providerWrite:false,productionMutation:false,assignmentId:'ACCEPTANCE_FIXTURE',checkpointHash:'0'.repeat(64),verified:[],unknowns:[{type:'FIXTURE',statement:'Acceptance fixture. Not a research result.',reason:'NOT_ESTABLISHED'}],sources:[]};
+// Offline acceptance fixtures now honor the same exact job binding/checkpoint contract as the builder.
+const stable=v=>Array.isArray(v)?'['+v.map(stable).join(',')+']':v&&typeof v==='object'?'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stable(v[k])).join(',')+'}':JSON.stringify(v);
+async function digest(v){const a=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v));return Array.from(new Uint8Array(a),b=>b.toString(16).padStart(2,'0')).join('');}
+async function fixtureFor(jobId){const {checkpointHash,...fields}=GOOD;const body={...fields,assignmentId:'ASSIGN_'+(await digest(jobId)).slice(0,24)};return {...body,checkpointHash:await digest(stable(body))};}
 
 async function scenarios(db,run){
  const ids=[],nonces=[],res=[];
@@ -79,18 +83,19 @@ async function scenarios(db,run){
   rec('parallel_claim_unique',got.length===4&&new Set(got.map(c=>c.jobId)).size===4&&got.every(c=>ids.includes(c.jobId)),{claimed:got.length});
   const by=Object.fromEntries(got.map(c=>[c.jobId,c]));
   const [a,b,c,d]=ids.map(i=>by[i]);
+  const goodA=await fixtureFor(a.jobId),goodC=await fixtureFor(c.jobId);
   // token enforcement + complete once
-  rec('wrong_token_rejected',(await Q.complete(db,{jobId:a.jobId,claimToken:'nope',result:GOOD,now:t0+200})).status===409);
-  rec('complete_accepted',(await Q.complete(db,{jobId:a.jobId,claimToken:a.claimToken,result:GOOD,now:t0+200})).state==='COMPLETE_ACCEPTED');
-  rec('second_complete_rejected',(await Q.complete(db,{jobId:a.jobId,claimToken:a.claimToken,result:GOOD,now:t0+201})).status===409);
+  rec('wrong_token_rejected',(await Q.complete(db,{jobId:a.jobId,claimToken:'nope',result:goodA,now:t0+200})).status===409);
+  rec('complete_accepted',(await Q.complete(db,{jobId:a.jobId,claimToken:a.claimToken,result:goodA,now:t0+200})).state==='COMPLETE_ACCEPTED');
+  rec('second_complete_rejected',(await Q.complete(db,{jobId:a.jobId,claimToken:a.claimToken,result:goodA,now:t0+201})).status===409);
   rec('fail_accepted_and_no_result',(await Q.fail(db,{jobId:b.jobId,claimToken:b.claimToken,errorCode:'ACCEPTANCE_FIXTURE',now:t0+200})).state==='FAILURE_ACCEPTED'&&(await rows(db,'SELECT result_json FROM research_jobs WHERE id=?',b.jobId))[0].result_json===null);
   // expired lease cannot complete; reclaim rotates token; old token dead (crash / reentry)
   const late=t0+100+Q.CLAIM_MS+1;
-  rec('expired_lease_cannot_complete',(await Q.complete(db,{jobId:c.jobId,claimToken:c.claimToken,result:GOOD,now:late})).status===409);
+  rec('expired_lease_cannot_complete',(await Q.complete(db,{jobId:c.jobId,claimToken:c.claimToken,result:goodC,now:late})).status===409);
   const re=await Q.claim(db,{now:late,token:`${run}-tok-re`,scopeJobIds:ids});
   rec('crash_reentry_reclaims_with_new_token',re.state==='CLAIMED'&&re.jobId===c.jobId&&re.claimToken!==c.claimToken&&re.reclaimed===true);
-  rec('stale_token_dead_after_reentry',(await Q.complete(db,{jobId:c.jobId,claimToken:c.claimToken,result:GOOD,now:late+1})).status===409);
-  rec('reentry_token_completes',(await Q.complete(db,{jobId:re.jobId,claimToken:re.claimToken,result:GOOD,now:late+2})).state==='COMPLETE_ACCEPTED');
+  rec('stale_token_dead_after_reentry',(await Q.complete(db,{jobId:c.jobId,claimToken:c.claimToken,result:goodC,now:late+1})).status===409);
+  rec('reentry_token_completes',(await Q.complete(db,{jobId:re.jobId,claimToken:re.claimToken,result:goodC,now:late+2})).state==='COMPLETE_ACCEPTED');
   // integrity: forged source result refused and job state unchanged
   const forged={...GOOD,verified:[{evidenceRefs:['X']}]};
   const fr=await Q.complete(db,{jobId:d.jobId,claimToken:d.claimToken,result:forged,now:t0+300});
