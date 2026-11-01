@@ -146,14 +146,14 @@ function laneHtml(r,q){
  const matched=laneMatches(r,q);
  const items=matched.map(v=>{
   const linked=(v.evidenceRefs||[]).map(ref=>sourceMap.get(ref)).filter(Boolean).map(s=>
-    s.url?'<a href="'+escapeHtml(s.url)+'" target="_blank" rel="noopener">Open source record ↗</a>':
+    s.url?'<a href="'+escapeHtml(s.url)+'" target="_blank" rel="noopener noreferrer">Open source record ↗</a>':
     '<span>Archived SHA-256 '+escapeHtml(s.contentHash)+'</span>').join(' · ');
   return '<div class="item"><p>'+escapeHtml(v.statement||'Source-linked statement')+'</p><div class="meta">'+linked+'</div></div>';
  }).join('');
  const answer=matched.length?('TENS verified '+matched.length+' source statement'+(matched.length===1?'':'s')+' in this subject evidence bundle relevant to this section.'):'No direct verified finding in the current subject bundle matched this section.';
  return '<div class="laneAnswer">'+escapeHtml(answer)+'</div>'+(items||'<div class="loading">This remains unresolved in the current admitted evidence bundle.</div>')
 }
-function renderRecords(){const rows=[...sourceMap.values()];recordsEl.innerHTML=rows.length?rows.map(s=>{const derived=String(s.authority||'')==='TENS_VERIFIED_DERIVED_CASE_SUMMARY',kind=derived?'Verified derived case summary':(s.recordType||s.sourceKind||'Public record'),inner='<strong>'+escapeHtml(s.label||'Evidence record')+'</strong><span>'+escapeHtml(kind)+(derived?' · derived from preserved source records':'')+(s.contentHash?' · SHA-256 '+escapeHtml(String(s.contentHash).slice(0,16))+'…':'')+'</span>';return s.url?'<a class="record" href="'+escapeHtml(s.url)+'" target="_blank" rel="noopener">'+inner+'</a>':'<div class="record">'+inner+'</div>'}).join(''):'<div class="loading">No public-safe source record has been attached yet.</div>'}
+function renderRecords(){const rows=[...sourceMap.values()];recordsEl.innerHTML=rows.length?rows.map(s=>{const derived=String(s.authority||'')==='TENS_VERIFIED_DERIVED_CASE_SUMMARY',kind=derived?'Verified derived case summary':(s.recordType||s.sourceKind||'Public record'),inner='<strong>'+escapeHtml(s.label||'Evidence record')+'</strong><span>'+escapeHtml(kind)+(derived?' · derived from preserved source records':'')+(s.contentHash?' · SHA-256 '+escapeHtml(String(s.contentHash).slice(0,16))+'…':'')+'</span>';return s.url?'<a class="record" href="'+escapeHtml(s.url)+'" target="_blank" rel="noopener noreferrer">'+inner+'</a>':'<div class="record">'+inner+'</div>'}).join(''):'<div class="loading">No public-safe source record has been attached yet.</div>'}
 function renderUnknowns(){const rows=[...unknownMap.values()];unknownEl.innerHTML=rows.length?rows.map(u=>'<div class="unknownItem">'+escapeHtml(u.statement||'This point remains unresolved.')+'</div>').join(''):'<div class="loading">No additional unresolved item was returned for this subject bundle.</div>'}
 function overviewDisplayAnswer(r){
  if(r.answer==='UNKNOWN')return 'TENS does not currently have enough admitted evidence to state an overview as established fact.';
