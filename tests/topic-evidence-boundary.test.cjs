@@ -21,6 +21,23 @@ test('fail closed: forged duplicate evidence identity',()=>{const r=fixture();r.
 test('fail closed: unsafe remote record URL',()=>{const r=fixture();r.sources[0].url='javascript:alert(1)';assert.equal(guard.validate(r).valid,false)});
 test('fail closed: explicit private source',()=>{const r=fixture();r.sources[0].publicSafe=false;assert.equal(guard.validate(r).valid,false)});
 test('evidence-free UNKNOWN remains honest',()=>{const r={answer:'UNKNOWN',verified:[],sources:[],unknowns:[{statement:'Not established'}]};assert.equal(guard.validate(r).valid,true)});
+
+test('UNKNOWN cannot smuggle a private source into the rendered evidence list',()=>{
+ const r={answer:'UNKNOWN',verified:[],unknowns:[{statement:'Not established'}],sources:[{evidenceId:'PRIVATE_DOC',publicSafe:false,url:'https://example.gov/private',preservationVerified:true,sourceKind:'PUBLIC_WEB',contentHash:hash}]};
+ const check=guard.validate(r);
+ assert.equal(check.valid,false);assert.equal(check.reason,'UNKNOWN_WITH_SOURCES');
+});
+test('UNKNOWN rejects unsafe links even when no finding cites them',()=>{
+ const r={answer:'UNKNOWN',verified:[],unknowns:[],sources:[{evidenceId:'FAKE_DOC',url:'javascript:alert(1)',publicSafe:true,preservationVerified:true,sourceKind:'PUBLIC_WEB',contentHash:hash}]};
+ assert.equal(guard.validate(r).valid,false);
+});
+test('UNKNOWN with invalid or duplicate evidence identities never passes',()=>{
+ for(const ids of [['bad!'],['SRC_A','SRC_A']]){
+  const r={answer:'UNKNOWN',verified:[],unknowns:[],sources:ids.map(evidenceId=>({evidenceId,preservationVerified:true,sourceKind:'ARCHIVED_PUBLIC_RECORD',contentHash:hash}))};
+  assert.equal(guard.validate(r).valid,false);
+ }
+});
+
 test('topic loads guard and checks COMPLETE before render',()=>{assert.match(page,/src="tens-topic-evidence-boundary\.js"/);assert.match(page,/SOURCE_BOUNDARY_HOLD/);assert.match(page,/TENS_TOPIC_EVIDENCE_BOUNDARY\?\.validate\(x\.result\)/)});
 test('topic never renders old localStorage snapshots as verified',()=>{assert.doesNotMatch(page,/loadSnapshot\(/);assert.doesNotMatch(page,/saveSnapshot\(/);assert.doesNotMatch(page,/R210 live evidence/);assert.doesNotMatch(page,/Latest verified R210/)});
 
