@@ -44,6 +44,7 @@ test('Only public HTTPS DNS-host source URLs enter the explicitly approved share
  assert.equal(r.body.autoPostAuthorized,false);
  assert.deepEqual(r.body.sources.map(s=>s.url),validURLs);
  const pkg=JSON.parse(x.map.get('share:'+r.body.packageId));
+ assert.equal(pkg.jobId,x.id,'evidence package points to original research job, not its assignment ID');
  assert(validURLs.every(url=>pkg.html.includes(url)));
  assert(invalidURLs.every(url=>!pkg.html.includes(url)));
 });
