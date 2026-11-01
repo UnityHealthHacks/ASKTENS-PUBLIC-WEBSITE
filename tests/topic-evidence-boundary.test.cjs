@@ -26,3 +26,65 @@ test('topic never renders old localStorage snapshots as verified',()=>{assert.do
 
 test('topic inline script parses',()=>{const start=page.lastIndexOf('<script>')+8,end=page.lastIndexOf('</script>');assert.ok(start>=8&&end>start);assert.doesNotThrow(()=>new vm.Script(page.slice(start,end)))});
 test('topic renders per-statement source evidence',()=>{assert.ok(page.includes('v.evidenceRefs||[]'));assert.ok(page.includes('Open source record'));assert.ok(page.includes('Archived SHA-256'))});
+
+const topicResearchSource=page.slice(page.indexOf('async function research(question)'),page.indexOf('\nfunction collect(r)'));
+function offlineTopicResearch({jobId='R203WEB_'+('a'.repeat(24)),startStatus=202,statusBody={state:'QUEUED'},statusHttp=200,guardValid=true}={}){
+ let now=0;const calls=[];
+ const ctx={
+  Date:{now:()=>now},setTimeout:(fn,ms)=>{now+=ms;fn()},
+  window:{
+   TENS_API:{async fetch(url,opt){
+    calls.push({url,method:opt?.method||'GET'});
+    if(opt?.method==='POST')return {status:startStatus,json:async()=>({jobId})};
+    return {ok:statusHttp===200,status:statusHttp,json:async()=>statusBody};
+   }},
+   TENS_TOPIC_EVIDENCE_BOUNDARY:{validate(x){return {valid:guardValid,result:x}}}
+  }
+ };
+ const fn=vm.runInNewContext(topicResearchSource+'\nresearch',ctx);
+ return {research:fn,calls,elapsed:()=>now};
+}
+test('subject research never sends a blank or over-limit question to the backend',async()=>{
+ const x=offlineTopicResearch();
+ await assert.rejects(x.research('    '),/QUESTION_INVALID/);
+ await assert.rejects(x.research('a'.repeat(1201)),/QUESTION_INVALID/);
+ assert.equal(x.calls.length,0);
+});
+test('subject research refuses malformed job identifiers before any status request',async()=>{
+ const x=offlineTopicResearch({jobId:'not-a-job'});
+ await assert.rejects(x.research('When?'),/JOB_ID_INVALID/);
+ assert.equal(x.calls.filter(c=>c.method==='GET').length,0);
+});
+test('subject research times out a queued job and never claims an answer',async()=>{
+ const x=offlineTopicResearch();
+ await assert.rejects(x.research('What happened?'),/WORKER_UNAVAILABLE/);
+ assert(x.elapsed()>=45000&&x.elapsed()<50000);
+});
+test('subject research refuses missing and unexpected backend states immediately',async()=>{
+ for(const statusBody of [{}, {state:'UNRECOGNIZED'}]){
+  const x=offlineTopicResearch({statusBody});
+  await assert.rejects(x.research('What happened?'),/RESEARCH_STATE_INVALID/);
+  assert.equal(x.calls.length,2);
+ }
+});
+test('subject research refuses failed status HTTP and rejected queue',async()=>{
+ await assert.rejects(offlineTopicResearch({statusHttp:503}).research('What happened?'),/RESEARCH_STATUS_503/);
+ await assert.rejects(offlineTopicResearch({startStatus:503}).research('What happened?'),/QUEUE_503/);
+});
+test('subject research fails closed on unverified completed result',async()=>{
+ const x=offlineTopicResearch({statusBody:{state:'COMPLETE',result:{answer:'unsupported'}},guardValid:false});
+ await assert.rejects(x.research('What happened?'),/SOURCE_BOUNDARY_HOLD/);
+});
+test('subject research returns a completed answer only after evidence validation',async()=>{
+ const result={answer:'validated synthetic answer'},x=offlineTopicResearch({statusBody:{state:'COMPLETE',result}});
+ assert.equal((await x.research('What happened?')).answer,result.answer);
+});
+test('subject research returns explicit backend FAILED holds, never a result',async()=>{
+ const x=offlineTopicResearch({statusBody:{state:'FAILED',errorCode:'PROOF_NOT_READY'}});
+ await assert.rejects(x.research('What happened?'),/RESEARCH_HOLD_PROOF_NOT_READY/);
+});
+test('subject research times out an indefinitely RUNNING worker',async()=>{
+ const x=offlineTopicResearch({statusBody:{state:'RUNNING'}});
+ await assert.rejects(x.research('What happened?'),/RESEARCH_TIMEOUT/);
+ assert(x.elapsed()>=120000&&x.elapsed()<130000);
+});
