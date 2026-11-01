@@ -16,6 +16,14 @@ function d1(){
 }
 const id=n=>'R203WEB_'+String(n).padStart(24,'0');
 const good=()=>({protocol:'TENS_R202_PUBLIC_RESULT_1',state:'COMPLETE',providerWrite:false,productionMutation:false,assignmentId:'A',checkpointHash:'h',verified:[],unknowns:[],sources:[]});
+const nodeCrypto=require('node:crypto');
+const hash=x=>nodeCrypto.createHash('sha256').update(x).digest('hex');
+const stable=v=>Array.isArray(v)?'['+v.map(stable).join(',')+']':v&&typeof v==='object'?'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stable(v[k])).join(',')+'}':JSON.stringify(v);
+const bound=(jobId,r=good())=>{
+ const {checkpointHash,...body}=r;
+ const identity={...body,assignmentId:'ASSIGN_'+hash(jobId).slice(0,24)};
+ return {...identity,checkpointHash:hash(stable(identity))};
+};
 test.before(async()=>{({DatabaseSync}=require('node:sqlite'));Q=await import(pathToFileURL(path.join(dir,'d1-research-queue.mjs')).href)});
 
 test('concurrent enqueues all land (no lost update) and claim is FIFO',async()=>{
@@ -35,21 +43,21 @@ test('queue bound is enforced atomically',async()=>{
 });
 test('complete/fail require the exact current claim token',async()=>{
  const db=d1();await Q.enqueue(db,{id:id(1),question:'q',now:1000});const c=await Q.claim(db,{now:1500,token:'secret-1'});
- assert.equal((await Q.complete(db,{jobId:id(1),claimToken:'wrong',result:good()})).status,409);
- assert.equal((await Q.complete(db,{jobId:id(1),claimToken:'',result:good()})).status,409);
- assert.equal((await Q.complete(db,{jobId:id(1),claimToken:c.claimToken,result:{...good(),providerWrite:true}})).status,400);
- assert.equal((await Q.complete(db,{jobId:id(1),claimToken:c.claimToken,result:good(),now:1600})).status,200);
- assert.equal((await Q.complete(db,{jobId:id(1),claimToken:c.claimToken,result:good()})).status,409,'single use');
+ assert.equal((await Q.complete(db,{jobId:id(1),claimToken:'wrong',result:bound(id(1),good())})).status,409);
+ assert.equal((await Q.complete(db,{jobId:id(1),claimToken:'',result:bound(id(1),good())})).status,409);
+ assert.equal((await Q.complete(db,{jobId:id(1),claimToken:c.claimToken,result:bound(id(1),{...good(),providerWrite:true})})).status,400);
+ assert.equal((await Q.complete(db,{jobId:id(1),claimToken:c.claimToken,result:bound(id(1),good()),now:1600})).status,200);
+ assert.equal((await Q.complete(db,{jobId:id(1),claimToken:c.claimToken,result:bound(id(1),good())})).status,409,'single use');
  assert.equal((await Q.fail(db,{jobId:id(1),claimToken:c.claimToken})).status,409,'no fail after complete');
- const s=await Q.status(db,id(1));assert.equal(s.state,'COMPLETE');assert.equal(s.result.assignmentId,'A');assert.equal(s.createdAt,1000);
+ const s=await Q.status(db,id(1));assert.equal(s.state,'COMPLETE');assert.equal(s.result.assignmentId,'ASSIGN_'+hash(id(1)).slice(0,24));assert.equal(s.createdAt,1000);
 });
 test('expired claim is reclaimed, token rotates, old worker cannot complete',async()=>{
  const db=d1();await Q.enqueue(db,{id:id(1),question:'q',now:1000});
  const a=await Q.claim(db,{now:2000,token:'A'});assert.equal(a.reclaimed,false);
  assert.equal((await Q.claim(db,{now:2000+Q.CLAIM_MS-1})).state,'EMPTY','not yet expired');
  const b=await Q.claim(db,{now:2000+Q.CLAIM_MS,token:'B'});assert.equal(b.state,'CLAIMED');assert.equal(b.reclaimed,true);
- assert.equal((await Q.complete(db,{jobId:id(1),claimToken:'A',result:good()})).status,409);
- assert.equal((await Q.complete(db,{jobId:id(1),claimToken:'B',result:good(),now:2000+Q.CLAIM_MS+1})).status,200);
+ assert.equal((await Q.complete(db,{jobId:id(1),claimToken:'A',result:bound(id(1),good())})).status,409);
+ assert.equal((await Q.complete(db,{jobId:id(1),claimToken:'B',result:bound(id(1),good()),now:2000+Q.CLAIM_MS+1})).status,200);
 });
 test('an expired lease cannot complete or fail even before another worker reclaims it',async()=>{
  const db=d1(),base=Date.now();
@@ -58,13 +66,13 @@ test('an expired lease cannot complete or fail even before another worker reclai
  const first=await Q.claim(db,{now:base+2,token:'lease17'});
  const second=await Q.claim(db,{now:base+3,token:'lease18'});
  assert.equal(first.jobId,id(17));assert.equal(second.jobId,id(18));
- assert.equal((await Q.complete(db,{jobId:first.jobId,claimToken:'lease17',result:good(),now:first.claimExpiresAt})).status,409,'completion at lease boundary forbidden');
+ assert.equal((await Q.complete(db,{jobId:first.jobId,claimToken:'lease17',result:bound(first.jobId,good()),now:first.claimExpiresAt})).status,409,'completion at lease boundary forbidden');
  assert.equal((await Q.fail(db,{jobId:second.jobId,claimToken:'lease18',errorCode:'WORKER_HOLD',now:second.claimExpiresAt+1})).status,409,'failure after expired lease forbidden');
  assert.equal((await Q.status(db,id(17))).state,'RUNNING');
  assert.equal((await Q.status(db,id(18))).state,'RUNNING');
  const reclaimed=await Q.claim(db,{now:Math.max(first.claimExpiresAt,second.claimExpiresAt)+2,token:'fresh'});
  assert.equal(reclaimed.state,'CLAIMED');assert.equal(reclaimed.reclaimed,true);
- assert.equal((await Q.complete(db,{jobId:reclaimed.jobId,claimToken:'fresh',result:good(),now:Math.max(first.claimExpiresAt,second.claimExpiresAt)+3})).status,200);
+ assert.equal((await Q.complete(db,{jobId:reclaimed.jobId,claimToken:'fresh',result:bound(reclaimed.jobId,good()),now:Math.max(first.claimExpiresAt,second.claimExpiresAt)+3})).status,200);
 });
 test('fail records a bounded error code and never leaves a result',async()=>{
  const db=d1();await Q.enqueue(db,{id:id(1),question:'q',now:1});const c=await Q.claim(db,{now:2,token:'T'});
@@ -94,7 +102,7 @@ test('route handler: public contract preserved; internal needs signature AND fre
  assert.equal((await (await pub('/api/research/status?jobId='+jobId)).json()).state,'QUEUED');
  sigOk=false;assert.equal((await internal('/internal/claim')).status,401);sigOk=true;
  const c=await (await internal('/internal/claim')).json();assert.equal(c.state,'CLAIMED');assert.equal(c.jobId,jobId);
- const nonce='replay-aaaaaaaaaaaaaaaaaaaa',mk=()=>new Request('https://api.asktens.com/internal/complete',{method:'POST',headers:{'x-tens-nonce':nonce},body:JSON.stringify({jobId,claimToken:c.claimToken,result:good()})});
+ const nonce='replay-aaaaaaaaaaaaaaaaaaaa',mk=()=>new Request('https://api.asktens.com/internal/complete',{method:'POST',headers:{'x-tens-nonce':nonce},body:JSON.stringify({jobId,claimToken:c.claimToken,result:bound(jobId,good())})});
  assert.equal((await Q.handleResearchRoute(mk(),env,ctx)).status,200);
  assert.equal((await Q.handleResearchRoute(mk(),env,ctx)).status,401,'replayed nonce');
  const st=await (await pub('/api/research/status?jobId='+jobId)).json();assert.equal(st.state,'COMPLETE');
@@ -165,7 +173,7 @@ test('D1 completion rejects forged source envelopes atomically but accepts valid
   const item=cases[i],db=d1(),jobId=id(100+i),now=10000+i;
   await Q.enqueue(db,{id:jobId,question:'test',now});
   const c=await Q.claim(db,{now:now+1,token:'tok'+i});
-  const r=await Q.complete(db,{jobId,claimToken:c.claimToken,result:make(item.sources),now:now+2});
+  const r=await Q.complete(db,{jobId,claimToken:c.claimToken,result:bound(jobId,make(item.sources)),now:now+2});
   assert.equal(r.status,item.accept?200:400,item.name);
   const st=await Q.status(db,jobId);
   assert.equal(st.state,item.accept?'COMPLETE':'RUNNING',item.name);
@@ -201,7 +209,7 @@ test('status lazily expires only the requested stale job; plain status stays a p
  assert.equal((await Q.status(db,id(32))).state,'QUEUED','other stale job untouched by exact-id scope');
  assert.equal((await Q.status(db,id(33),{now})).state,'QUEUED','fresh job not expired');
  assert.equal((await Q.status(db,'not-a-job',{now})),null);
- const c=await Q.complete(db,{jobId:id(31),claimToken:'x',result:good(),now});assert.equal(c.status,409);
+ const c=await Q.complete(db,{jobId:id(31),claimToken:'x',result:bound(id(31),good()),now});assert.equal(c.status,409);
 });
 
 // Oct 17 review-only boundary regression: do not admit coercible evidence IDs,
@@ -227,4 +235,32 @@ test('sourceProblem: explicit publicSafe/publicAccess other than true contradict
  for(const f of ['publicSafe','publicAccess'])for(const v of [false,'true',null,0])assert.equal(Q.sourceProblem({...base,sources:[{...s0,[f]:v}]}),'SOURCE_NOT_PUBLIC',f+String(v));
  assert.equal(Q.sourceProblem({...base,sources:[{...s0,publicSafe:true,publicAccess:true}]}),'');
  assert.equal(Q.sourceProblem({...base,answer:'UNKNOWN',verified:[]}),'SOURCE_UNCITED');
+});
+
+
+test('completion binds exact job assignment and canonical checkpoint hash; never accepts cross-job answers',async()=>{
+ const db=d1(),now=10000;
+ await Q.enqueue(db,{id:id(801),question:'Midnight Pass',now});
+ await Q.enqueue(db,{id:id(802),question:'Blackburn Point',now:now+1});
+ const a=await Q.claim(db,{now:now+2,token:'claim801'});
+ const b=await Q.claim(db,{now:now+3,token:'claim802'});
+ const resultA=bound(a.jobId,good()),resultB=bound(b.jobId,good());
+ assert.equal(await Q.resultIdentityProblem(b.jobId,resultA),'RESULT_JOB_IDENTITY_MISMATCH');
+ assert.equal((await Q.complete(db,{jobId:b.jobId,claimToken:b.claimToken,result:resultA,now:now+4})).error,'RESULT_JOB_IDENTITY_MISMATCH');
+ const badHash={...resultB,checkpointHash:'0'.repeat(64)};
+ assert.equal((await Q.complete(db,{jobId:b.jobId,claimToken:b.claimToken,result:badHash,now:now+5})).error,'RESULT_CHECKPOINT_MISMATCH');
+ const malformedHash={...resultB,checkpointHash:''};
+ assert.equal((await Q.complete(db,{jobId:b.jobId,claimToken:b.claimToken,result:malformedHash,now:now+6})).error,'RESULT_CHECKPOINT_INVALID');
+ const tampered={...resultB,unknowns:[{type:'PUBLIC_CLAIM',statement:'Unsupported alteration',reason:'NOT_ESTABLISHED'}]};
+ assert.equal((await Q.complete(db,{jobId:b.jobId,claimToken:b.claimToken,result:tampered,now:now+7})).error,'RESULT_CHECKPOINT_MISMATCH');
+ const override=bound(b.jobId,{...good(),assignmentId:'ASSIGN_custom'});
+ assert.equal((await Q.complete(db,{jobId:b.jobId,claimToken:b.claimToken,result:{...override,assignmentId:'ASSIGN_custom'},now:now+8})).error,'RESULT_JOB_IDENTITY_MISMATCH');
+ assert.equal((await Q.complete(db,{jobId:b.jobId,claimToken:'wrong',result:resultB,now:now+9})).status,409);
+ assert.equal((await Q.complete(db,{jobId:b.jobId,claimToken:b.claimToken,result:resultB,now:b.claimExpiresAt})).status,409);
+ assert.equal((await Q.complete(db,{jobId:b.jobId,claimToken:b.claimToken,result:resultB,now:now+10})).status,200);
+ assert.equal((await Q.complete(db,{jobId:b.jobId,claimToken:b.claimToken,result:resultB,now:now+11})).status,409);
+ assert.equal((await Q.complete(db,{jobId:a.jobId,claimToken:a.claimToken,result:resultA,now:now+12})).status,200);
+ const completed=await Q.status(db,b.jobId);
+ assert.equal(completed.state,'COMPLETE');
+ assert.equal(completed.result.assignmentId,resultB.assignmentId);
 });
