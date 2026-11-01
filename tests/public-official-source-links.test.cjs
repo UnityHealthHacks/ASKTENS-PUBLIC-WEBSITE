@@ -63,7 +63,7 @@ test('the public list does not silently insert a source into subjects with no re
 
 test('candidate links are explicitly not treated as verified public accessibility',()=>{
   assert.match(html,/<h2>Candidate public records and source links<\/h2>/);
-  assert.match(html,/not proof that each link opens without access restrictions/);
+  assert.match(html,/or proof that each link opens without access restrictions/);
   assert.match(html,/require independent verification before a link can support a beta citation/);
   assert.match(html,/An inaccessible link does not mean the underlying record is absent/);
 });
