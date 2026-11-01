@@ -63,9 +63,7 @@ export async function classifyBinding(db,approval,{now}){
 const ID=(run,n)=>`R203WEB_ACPT${run}${String(n).padStart(8,'0')}`; // matches Q.jobIdOk, never collides with real R203WEB_<32hex>
 const GOOD={protocol:'TENS_R202_PUBLIC_RESULT_1',state:'COMPLETE',providerWrite:false,productionMutation:false,assignmentId:'ACCEPTANCE_FIXTURE',checkpointHash:'0'.repeat(64),verified:[],unknowns:[{type:'FIXTURE',statement:'Acceptance fixture. Not a research result.',reason:'NOT_ESTABLISHED'}],sources:[]};
 // Offline acceptance fixtures now honor the same exact job binding/checkpoint contract as the builder.
-const stable=v=>Array.isArray(v)?'['+v.map(stable).join(',')+']':v&&typeof v==='object'?'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stable(v[k])).join(',')+'}':JSON.stringify(v);
-async function digest(v){const a=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v));return Array.from(new Uint8Array(a),b=>b.toString(16).padStart(2,'0')).join('');}
-async function fixtureFor(jobId){const {checkpointHash,...fields}=GOOD;const body={...fields,assignmentId:'ASSIGN_'+(await digest(jobId)).slice(0,24)};return {...body,checkpointHash:await digest(stable(body))};}
+async function fixtureFor(jobId){const {checkpointHash,...fields}=GOOD;const body={...fields,assignmentId:'ASSIGN_'+(await sha256Hex(jobId)).slice(0,24)};return {...body,checkpointHash:await sha256Hex(stable(body))};}
 
 async function scenarios(db,run){
  const ids=[],nonces=[],res=[];
