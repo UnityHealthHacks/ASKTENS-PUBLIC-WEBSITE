@@ -11,7 +11,10 @@
         typeof result.answer !== 'string') return fail('MALFORMED_RESULT');
     if (!result.verified.length) {
       if (result.answer !== 'UNKNOWN') return fail('UNSUPPORTED_ANSWER');
-      return {valid:true, result:{...result, answer:'UNKNOWN', verified:[]}};
+      // An unresolved answer has no admitted evidence cards. Reject unexpected
+      // sources before the topic page could render their links or metadata.
+      if (result.sources.length) return fail('UNKNOWN_WITH_SOURCES');
+      return {valid:true, result:{...result, answer:'UNKNOWN', verified:[], sources:[]}};
     }
     const indexed = new Map();
     for (const source of result.sources) {
