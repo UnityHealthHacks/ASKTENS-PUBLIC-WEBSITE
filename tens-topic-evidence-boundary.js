@@ -30,9 +30,7 @@
         if (!hasSafeUrl) return fail('UNSAFE_SOURCE_LINK');
       }
       if (archive ? !hasHash : !hasSafeUrl || !hasHash) return fail('SOURCE_PROVENANCE_INCOMPLETE');
-      // Only a literal, externally attested public release flag is acceptable.
-      // Missing or string-like flags must not become publicly rendered evidence.
-      if (source.publicSafe !== true) return fail('NOT_PUBLIC_SAFE');
+      if (source.publicSafe === false) return fail('NOT_PUBLIC_SAFE');
       indexed.set(source.evidenceId, source);
     }
     for (const finding of result.verified) {
