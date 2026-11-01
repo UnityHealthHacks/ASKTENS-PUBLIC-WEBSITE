@@ -159,7 +159,7 @@ const provider=Object.freeze({version:'4.2.0-live-proof-i18n',scopeLabel:'Live T
   await sleep(i<5?500:900);
   const res=await window.TENS_API.fetch('/api/research/status?jobId='+encodeURIComponent(queued.jobId));if(!res.ok)throw new Error('TENS_STATUS_'+res.status);
   const state=await res.json();
-  if(state.state==='COMPLETE'){emit({eventType:'TENS_COMPLETE',message:lang==='es'?'TENS completó la revisión de evidencia.':'TENS completed the proof-bound evidence review.'});return transform(state,lang,original)}
+  if(state.state==='COMPLETE'){const verifiedResult=transform(state,lang,original);emit({eventType:'TENS_COMPLETE',message:lang==='es'?'TENS completó la revisión de evidencia.':'TENS completed the proof-bound evidence review.'});return verifiedResult}
   if(state.state==='FAILED')throw new Error('TENS_RESEARCH_HOLD_'+String(state.errorCode||'UNKNOWN'));
   // Do not strand a visitor indefinitely on RUNNING or silently accept unknown protocol states.
   if(state.state==='RUNNING'&&Date.now()-startedAt>=120000)throw new Error('TENS_RESEARCH_TIMEOUT');
