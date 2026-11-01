@@ -60,3 +60,10 @@ test('public source URLs are unique and not leaked into unrelated dossier config
 test('the public list does not silently insert a source into subjects with no reviewed public link',()=>{
   for(const topic of sections.keys())if(!expected.has(topic))assert.equal(allLinks.some(x=>x.topic===topic),false);
 });
+
+test('candidate links are explicitly not treated as verified public accessibility',()=>{
+  assert.match(html,/<h2>Candidate public records and source links<\/h2>/);
+  assert.match(html,/not proof that each link opens without access restrictions/);
+  assert.match(html,/require independent verification before a link can support a beta citation/);
+  assert.match(html,/An inaccessible link does not mean the underlying record is absent/);
+});
