@@ -80,3 +80,13 @@ test('backend FAILED and queue rejection surface as errors, not answers',async()
  await assert.rejects(ask({state:'FAILED',errorCode:'X'}),/TENS_RESEARCH_HOLD_X/);
  await assert.rejects(ask({},{startStatus:503}),/TENS_QUEUE_REJECTED_503/);
 });
+
+test('public evidence URL guard refuses insecure, relative and credential-bearing links',()=>{
+ const window={location:{href:'https://asktens.com/results.html'}};
+ vm.runInNewContext(load('tens-evidence-guard.js'),{window,URL});
+ const guard=window.TENS_EVIDENCE_GUARD;
+ const base={id:'SRC_Record_1',occurrenceId:'OCC_Record_1',label:'Public agency record',recordType:'PUBLIC_WEB',provenanceStatus:'verified',publicSafe:true,url:'https://agency.gov/report.pdf'};
+ function accepts(url){const errors=[];guard.validateResult({sources:[]});const r={...base,url};const audit={searchEventId:'EVT_SAMPLE',indexVersion:'IDX_1',adapterVersion:'ADAPTER_1',rulesetVersion:'RULESET_1',environment:'PRODUCTION',resultState:'COMPLETE'};const result={audit,sources:[r],verified:[{id:'VER_1',title:'Finding',text:'Record',classification:'VERIFIED',sourceIds:[r.id],limitations:['Source limits'],provenanceStatus:'verified'}],inference:[],unknown:[],limitations:['Bounded'],actions:[]};return guard.validateResult(result).valid}
+ assert.equal(accepts('https://agency.gov/report.pdf'),true);
+ for(const url of ['http://agency.gov/report.pdf','/source','https://name:pass@agency.gov/source','https://agency.gov/report.pdf#credential','https://agency.gov:8443/report','javascript:alert(1)','https://localhost/source'])assert.equal(accepts(url),false,url);
+});
