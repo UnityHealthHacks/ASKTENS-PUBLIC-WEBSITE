@@ -163,7 +163,7 @@ function overviewDisplayAnswer(r){
  }
  return String(r.answer||'Current evidence loaded.');
 }
-function renderOverview(r){collect(r);const verified=r.verified||[];summary.textContent=overviewDisplayAnswer(r);highlights.innerHTML=verified.slice(0,6).map(v=>'<li>'+escapeHtml(v.statement||'')+'</li>').join('');meta.textContent='Source-linked candidate dossier · '+verified.length+' source statement'+(verified.length===1?'':'s')+' · '+(r.sources||[]).length+' supporting record'+((r.sources||[]).length===1?'':'s')+'.';renderRecords();renderUnknowns()}
+function renderOverview(r){collect(r);const verified=r.verified||[];summary.textContent=overviewDisplayAnswer(r);highlights.innerHTML=verified.slice(0,6).map(v=>'<li>'+escapeHtml(v.statement||'')+'</li>').join('');meta.textContent=verified.length?('Source-linked candidate dossier · '+verified.length+' source statement'+(verified.length===1?'':'s')+' · '+(r.sources||[]).length+' supporting record'+((r.sources||[]).length===1?'':'s')+'.'):'No verified findings in the currently admitted evidence. Open questions remain unresolved.';renderRecords();renderUnknowns()}
 function renderBundle(r){
  sourceMap.clear();unknownMap.clear();renderOverview(r);
  page.lanes.forEach((lane,i)=>{const el=document.getElementById('lane'+i);el.innerHTML='<h2>'+escapeHtml(lane[0])+'</h2><div class="sub">'+escapeHtml(lane[1])+'</div>'+laneHtml(r,lane[1]);});
@@ -183,7 +183,7 @@ function renderBundle(r){
  const coverage=page.lanes.map(x=>x[0]+': '+x[1]).join(' ');
  const dossierQ='Build one current evidence-backed subject dossier for '+page.title+'. Cover these sections from the same admitted evidence bundle: '+coverage+' Include verified findings, supporting records, and unresolved gaps. Facts first; do not speculate.';
  try{
-   const r=await research(dossierQ);renderBundle(r);updated.textContent='Current source-linked dossier loaded · '+new Date().toLocaleString();
+   const r=await research(dossierQ);renderBundle(r);updated.textContent=(r.answer==='UNKNOWN'?'Unresolved — no verified findings · ':'Source-linked candidate dossier loaded · ')+new Date().toLocaleString();
  }catch(e){
    summary.textContent='TENS could not complete the subject bundle safely. No unsupported summary was generated.';meta.textContent=String(e.message||e);updated.textContent='Evidence refresh held safely'
  }
