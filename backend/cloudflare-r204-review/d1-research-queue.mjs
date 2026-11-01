@@ -92,7 +92,8 @@ export async function claim(db,{now=Date.now(),token=crypto.randomUUID(),scopeJo
 // A lease must still be valid at commit time, even if no other worker has reclaimed it. A reclaimed job also rotates its token.
 export async function complete(db,{jobId,claimToken,result,now=Date.now()}){
  if(!jobIdOk(jobId)||!resultOk(result))return {status:400,error:'RESULT_SCHEMA_REJECTED'};
- const payload=JSON.stringify(result);if(payload.length>MAX_RESULT_CHARS)return {status:413,error:'RESULT_TOO_LARGE'};
+ // Check the actual UTF-8 storage budget, not JavaScript UTF-16 code units.
+ const payload=JSON.stringify(result);if(new TextEncoder().encode(payload).byteLength>MAX_RESULT_CHARS)return {status:413,error:'RESULT_TOO_LARGE'};
  const sp=sourceProblem(result);if(sp)return {status:400,error:'RESULT_NOT_SOURCE_BACKED_'+sp};
  if(typeof claimToken!=='string'||!claimToken)return {status:409,error:'JOB_STATE_CONFLICT'};
  const identityFailure=await resultIdentityProblem(jobId,result);
@@ -118,10 +119,16 @@ export async function status(db,id,{now,sessionHash}={}){
  if(now!==undefined&&jobIdOk(id))await expireStale(db,now,[id]);
  const row=await db.prepare('SELECT id,state,result_json,error_code,created_at,updated_at FROM research_jobs WHERE id=?').bind(id).first();
  if(!row)return null;let result=null;if(row.result_json){try{result=JSON.parse(row.result_json)}catch{}}
+ // A completed row with a damaged/mismatched result must never masquerade as a verified answer.
+ // This is a read-only protective projection; repair requires independent audit of the durable row.
+ if(row.state==='COMPLETE'&&(!resultOk(result)||sourceProblem(result)||(await resultIdentityProblem(id,result))))
+  return {jobId:row.id,state:'FAILED',result:null,errorCode:'RESULT_INTEGRITY_HOLD',createdAt:row.created_at,updatedAt:row.updated_at};
  return {jobId:row.id,state:row.state,result,errorCode:row.error_code||null,createdAt:row.created_at,updatedAt:row.updated_at};
 }
 // Cross-isolate replay protection (the in-memory seenNonces map in worker.mjs is per isolate only).
 export async function consumeNonce(db,nonce,now=Date.now(),{pruneExpired=true}={}){
+ // Reject absent/malformed nonces before any pruning or database mutation.
+ if(typeof nonce!=='string'||!nonce||nonce.length>80||!/^[A-Za-z0-9_-]+$/.test(nonce))return false;
  // The disposable acceptance harness must never prune unrelated historical nonces.
  if(pruneExpired)await db.prepare('DELETE FROM internal_nonces WHERE created_at<?').bind(now-NONCE_MS).run();
  const r=await db.prepare('INSERT OR IGNORE INTO internal_nonces(nonce,created_at) VALUES(?,?)').bind(String(nonce),now).run();
