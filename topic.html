@@ -112,10 +112,29 @@ function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;',
 function reveal(el){requestAnimationFrame(()=>el.classList.add('on'))}
 [...document.querySelectorAll('.reveal')].forEach((el,i)=>setTimeout(()=>reveal(el),100+i*70));
 async function research(question){
- const start=await window.TENS_API.fetch('/api/research',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question})});
- if(start.status!==202)throw new Error('QUEUE_'+start.status);const j=await start.json();
- for(let i=0;i<240;i++){await new Promise(r=>setTimeout(r,i<8?350:600));const r=await window.TENS_API.fetch('/api/research/status?jobId='+encodeURIComponent(j.jobId));const x=await r.json();if(x.state==='COMPLETE'){const check=window.TENS_TOPIC_EVIDENCE_BOUNDARY?.validate(x.result);if(!check?.valid)throw new Error('SOURCE_BOUNDARY_HOLD');return check.result;}if(x.state==='FAILED')throw new Error(x.errorCode||'RESEARCH_FAILED')}
- throw new Error('RESEARCH_TIMEOUT')
+ const q=String(question||'').trim();if(!q||q.length>1200)throw new Error('QUESTION_INVALID');
+ const start=await window.TENS_API.fetch('/api/research',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q})});
+ if(start.status!==202)throw new Error('QUEUE_'+start.status);
+ const j=await start.json();
+ if(!/^R20[23]WEB_[A-Za-z0-9_-]{20,80}$/.test(String(j?.jobId||'')))throw new Error('JOB_ID_INVALID');
+ const started=Date.now();
+ for(let i=0;i<240;i++){
+  await new Promise(r=>setTimeout(r,i<8?350:600));
+  const res=await window.TENS_API.fetch('/api/research/status?jobId='+encodeURIComponent(j.jobId));
+  if(!res.ok)throw new Error('RESEARCH_STATUS_'+res.status);
+  const x=await res.json();
+  if(x?.state==='COMPLETE'){
+   const check=window.TENS_TOPIC_EVIDENCE_BOUNDARY?.validate(x.result);
+   if(!check?.valid)throw new Error('SOURCE_BOUNDARY_HOLD');
+   return check.result;
+  }
+  if(x?.state==='FAILED')throw new Error('RESEARCH_HOLD_'+String(x.errorCode||'UNKNOWN'));
+  if(!['QUEUED','RUNNING'].includes(x?.state))throw new Error('RESEARCH_STATE_INVALID');
+  const elapsed=Date.now()-started;
+  if(x.state==='QUEUED'&&elapsed>=45000)throw new Error('WORKER_UNAVAILABLE');
+  if(x.state==='RUNNING'&&elapsed>=120000)throw new Error('RESEARCH_TIMEOUT');
+ }
+ throw new Error('RESEARCH_TIMEOUT');
 }
 function collect(r){for(const s of r.sources||[])sourceMap.set(s.evidenceId,s);for(const u of r.unknowns||[])unknownMap.set((u.type||'UNKNOWN')+'|'+(u.statement||''),u)}
 function terms(s){return [...new Set(String(s||'').toLowerCase().match(/[a-z0-9-]{4,}/g)||[])].filter(x=>!['what','does','record','establish','about','current','public','with','from','this','that'].includes(x))}
