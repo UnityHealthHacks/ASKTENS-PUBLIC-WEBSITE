@@ -22,6 +22,10 @@ const post=(env,question,s)=>cand.default.fetch(new Request(API+'/api/research',
 const status=(env,id,s)=>cand.default.fetch(new Request(API+'/api/research/status?jobId='+id,{headers:{origin:UI,...(s?{'x-tens-public-session':s}:{})}}),env);
 const internal=(env,p,body,nonce)=>cand.default.fetch(new Request(API+p,{method:'POST',headers:{'x-tens-timestamp':String(Date.now()),'x-tens-nonce':nonce||('nonce'+(seq++)+'x'.repeat(16)),'x-tens-signature':VALID},body:JSON.stringify(body||{})}),env);
 const good=(over={})=>({protocol:'TENS_R202_PUBLIC_RESULT_1',state:'COMPLETE',providerWrite:false,productionMutation:false,assignmentId:'A',checkpointHash:'h',verified:[],unknowns:[{statement:'u'}],sources:[],...over});
+const nodeCrypto=require('node:crypto');
+const h=x=>nodeCrypto.createHash('sha256').update(x).digest('hex');
+const stable=v=>Array.isArray(v)?'['+v.map(stable).join(',')+']':v&&typeof v==='object'?'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stable(v[k])).join(',')+'}':JSON.stringify(v);
+const bound=(id,r=good())=>{const {checkpointHash,...body}=r;const x={...body,assignmentId:'ASSIGN_'+h(id).slice(0,24)};return {...x,checkpointHash:h(stable(x))};};
 test.before(async()=>{
  ({DatabaseSync}=require('node:sqlite'));
  Object.defineProperty(crypto.subtle,'verify',{configurable:true,value:async(a,k,sig)=>Buffer.from(sig).toString()==='valid'||false});
@@ -63,18 +67,18 @@ test('wrong, replayed, stale and cross-job claim tokens cannot finish jobs',asyn
  // Jobs submitted within one millisecond tie on created_at; FIFO then orders by random job ID.
  // Associate tokens with job identity rather than assuming submission order wins the tie.
  const ca=first.jobId===a?first:second,cb=first.jobId===b?first:second;
- assert.equal((await internal(env,'/internal/complete',{jobId:a,claimToken:cb.claimToken,result:good()})).status,409,'other job token');
- assert.equal((await internal(env,'/internal/complete',{jobId:a,claimToken:'nope',result:good()})).status,409);
+ assert.equal((await internal(env,'/internal/complete',{jobId:a,claimToken:cb.claimToken,result:bound(a,good())})).status,409,'other job token');
+ assert.equal((await internal(env,'/internal/complete',{jobId:a,claimToken:'nope',result:bound(a,good())})).status,409);
  assert.equal((await internal(env,'/internal/fail',{jobId:a})).status,409,'missing token');
  const n='replayed-nonce-aaaaaaaaaa';
- assert.equal((await internal(env,'/internal/complete',{jobId:a,claimToken:ca.claimToken,result:good()},n)).status,200);
- assert.equal((await internal(env,'/internal/complete',{jobId:a,claimToken:ca.claimToken,result:good()},n)).status,401,'replayed nonce');
- assert.equal((await internal(env,'/internal/complete',{jobId:a,claimToken:ca.claimToken,result:good()})).status,409,'second finish');
+ assert.equal((await internal(env,'/internal/complete',{jobId:a,claimToken:ca.claimToken,result:bound(a,good())},n)).status,200);
+ assert.equal((await internal(env,'/internal/complete',{jobId:a,claimToken:ca.claimToken,result:bound(a,good())},n)).status,401,'replayed nonce');
+ assert.equal((await internal(env,'/internal/complete',{jobId:a,claimToken:ca.claimToken,result:bound(a,good())})).status,409,'second finish');
  // lease expiry: age b's lease then reclaim; old token is dead
  env.DB.raw.prepare('update research_jobs set claim_expires_at=1 where id=?').run(b);
  const cb2=await (await internal(env,'/internal/claim')).json();assert.equal(cb2.jobId,b);assert.equal(cb2.reclaimed,true);
- assert.equal((await internal(env,'/internal/complete',{jobId:b,claimToken:cb.claimToken,result:good()})).status,409,'stale token');
- assert.equal((await internal(env,'/internal/complete',{jobId:b,claimToken:cb2.claimToken,result:good()})).status,200);
+ assert.equal((await internal(env,'/internal/complete',{jobId:b,claimToken:cb.claimToken,result:bound(b,good())})).status,409,'stale token');
+ assert.equal((await internal(env,'/internal/complete',{jobId:b,claimToken:cb2.claimToken,result:bound(b,good())})).status,200);
  assert.equal((await (await status(env,b,sess(2))).json()).state,'COMPLETE');
 });
 test('unsigned or badly signed internal calls are rejected before any state change',async()=>{
@@ -94,12 +98,12 @@ test('already-queued legacy job is not stranded: dual-read status, legacy-first 
  assert.equal((await (await status(env,old,sess(4))).json()).state,'QUEUED','legacy status still readable');
  assert.equal((await (await status(env,neu,sess(5))).json()).state,'QUEUED');
  const c1=await (await internal(env,'/internal/claim')).json();assert.equal(c1.jobId,old,'oldest (legacy) first');
- assert.equal((await internal(env,'/internal/complete',{jobId:old,claimToken:'wrong',result:good()})).status,409,'legacy token enforced by legacy');
+ assert.equal((await internal(env,'/internal/complete',{jobId:old,claimToken:'wrong',result:bound(old,good())})).status,409,'legacy token enforced by legacy');
  const c2=await (await internal(env,'/internal/claim')).json();assert.equal(c2.jobId,neu,'then D1');
- assert.equal((await internal(env,'/internal/complete',{jobId:old,claimToken:c1.claimToken,result:good()})).status,200);
+ assert.equal((await internal(env,'/internal/complete',{jobId:old,claimToken:c1.claimToken,result:bound(old,good())})).status,200);
  assert.equal((await (await status(env,old,sess(4))).json()).state,'COMPLETE');
- assert.equal((await internal(env,'/internal/complete',{jobId:neu,claimToken:c2.claimToken,result:good()})).status,200);
- assert.equal((await internal(env,'/internal/complete',{jobId:neu,claimToken:c1.claimToken,result:good()})).status,409);
+ assert.equal((await internal(env,'/internal/complete',{jobId:neu,claimToken:c2.claimToken,result:bound(neu,good())})).status,200);
+ assert.equal((await internal(env,'/internal/complete',{jobId:neu,claimToken:c1.claimToken,result:bound(neu,good())})).status,409);
 });
 test('session separation: header required, per-session active cap, other sessions unaffected, only a hash is stored',async()=>{
  const env={TENS_D1_QUEUE:FLAG,TENS_PUBLIC_JOBS:kv(),DB:d1()};
@@ -124,7 +128,7 @@ test('result must be exact TENS_R202 protocol and source-backed (server mirror o
   await internal(env,'/internal/fail',{jobId:c.jobId,claimToken:c.claimToken,errorCode:'X'});
  }
  const id=(await (await post(env,'ok',sess(30))).json()).jobId,c=await (await internal(env,'/internal/claim')).json();
- assert.equal((await internal(env,'/internal/complete',{jobId:id,claimToken:c.claimToken,result:good({verified:[{evidenceRefs:['EV1']}],sources:[src()]})})).status,200);
+ assert.equal((await internal(env,'/internal/complete',{jobId:id,claimToken:c.claimToken,result:bound(id,good({verified:[{evidenceRefs:['EV1']}],sources:[src()]}))})).status,200);
 });
 test('candidate hygiene: legacy worker.mjs verification key unchanged, candidate not wired to R212 or defaults',()=>{
  const w=fs.readFileSync(path.join(dir,'worker.mjs'),'utf8'),c=fs.readFileSync(path.join(dir,'worker-d1-candidate.mjs'),'utf8');
