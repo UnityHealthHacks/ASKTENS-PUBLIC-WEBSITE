@@ -43,6 +43,27 @@ export function sourceProblem(r){
  if(r.answer==='UNKNOWN'&&r.verified.length>0)return 'ANSWER_CONFLICT';
  return '';
 }
+// Nonproduction candidate: bind every completion to the exact claimed job and its immutable body.
+// Builder's documented assignment ID is ASSIGN_ + the first 24 SHA-256 hex chars of jobId.
+// A custom assignment override has no immutable job metadata in this schema, so fail closed.
+const stableBody=v=>Array.isArray(v)?'['+v.map(stableBody).join(',')+']':
+  v&&typeof v==='object'?'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stableBody(v[k])).join(',')+'}':
+  JSON.stringify(v);
+async function digestHex(v){
+ const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v));
+ return Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'0')).join('');
+}
+export async function resultIdentityProblem(jobId,result){
+ if(!jobIdOk(jobId)||!resultOk(result))return 'RESULT_SCHEMA_REJECTED';
+ const expectedAssignment='ASSIGN_'+(await digestHex(jobId)).slice(0,24);
+ if(result.assignmentId!==expectedAssignment)return 'RESULT_JOB_IDENTITY_MISMATCH';
+ if(!HEX64.test(result.checkpointHash))return 'RESULT_CHECKPOINT_INVALID';
+ const {checkpointHash,...body}=result;
+ const calculated=await digestHex(stableBody(body));
+ if(checkpointHash.toLowerCase()!==calculated)return 'RESULT_CHECKPOINT_MISMATCH';
+ return '';
+}
+
 const changes=r=>Number(r?.meta?.changes??r?.changes??0);
 
 export const MAX_PER_SESSION=3;
@@ -74,6 +95,8 @@ export async function complete(db,{jobId,claimToken,result,now=Date.now()}){
  const payload=JSON.stringify(result);if(payload.length>MAX_RESULT_CHARS)return {status:413,error:'RESULT_TOO_LARGE'};
  const sp=sourceProblem(result);if(sp)return {status:400,error:'RESULT_NOT_SOURCE_BACKED_'+sp};
  if(typeof claimToken!=='string'||!claimToken)return {status:409,error:'JOB_STATE_CONFLICT'};
+ const identityFailure=await resultIdentityProblem(jobId,result);
+ if(identityFailure)return {status:400,error:identityFailure};
  const r=await db.prepare("UPDATE research_jobs SET state='COMPLETE',result_json=?1,error_code=NULL,claim_token=NULL,claim_expires_at=NULL,updated_at=?2 WHERE id=?3 AND state='RUNNING' AND claim_token=?4 AND claim_expires_at>?2").bind(payload,now,jobId,claimToken).run();
  return changes(r)===1?{status:200,state:'COMPLETE_ACCEPTED'}:{status:409,error:'JOB_STATE_CONFLICT'};
 }
