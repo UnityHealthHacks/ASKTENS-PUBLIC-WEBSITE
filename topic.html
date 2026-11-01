@@ -185,7 +185,14 @@ function renderBundle(r){
  try{
    const r=await research(dossierQ);renderBundle(r);updated.textContent=(r.answer==='UNKNOWN'?'Unresolved — no verified findings · ':'Source-linked candidate dossier loaded · ')+new Date().toLocaleString();
  }catch(e){
-   summary.textContent='TENS could not complete the subject bundle safely. No unsupported summary was generated.';meta.textContent=String(e.message||e);updated.textContent='Evidence refresh held safely'
+   summary.textContent='TENS could not complete the subject bundle safely. No unsupported summary was generated.';
+   meta.textContent=String(e.message||e);updated.textContent='Evidence refresh held safely';
+   for(let i=0;i<page.lanes.length;i++){
+     const lane=document.getElementById('lane'+i);
+     if(lane){lane.textContent='No verified evidence was returned for this section. The research request was held.'}
+   }
+   recordsEl.textContent='No new public-safe research records were returned.';
+   unknownEl.textContent='The research request was held. The underlying public records may still exist.';
  }
 })();
 document.getElementById('askForm').addEventListener('submit',e=>{e.preventDefault();const q=document.getElementById('ask').value.trim();if(q)location.href='results.html?q='+encodeURIComponent(q)});
