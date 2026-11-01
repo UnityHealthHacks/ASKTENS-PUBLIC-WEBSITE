@@ -148,6 +148,8 @@ const QUEUE_NOTICE_MS=10000,QUEUE_WAIT_LIMIT_MS=45000;
 const provider=Object.freeze({version:'4.2.0-live-proof-i18n',scopeLabel:'Live TENS public research — proof-bound evidence',async search(query,options={}){
  if(!window.TENS_API||window.TENS_API.error)throw new Error(window.TENS_API?.error||'TENS_API_NOT_READY');
  const emit=typeof options.emitStatus==='function'?options.emitStatus:()=>{},lang=String(options.language||'en').toLowerCase()==='es'?'es':'en',original=String(query||'').trim();
+ // Fail before network I/O on invalid questions; the edge enforces the same limit.
+ if(!original||original.length>1200)throw new Error('TENS_QUESTION_INVALID');
  emit({eventType:'TENS_QUEUE',message:lang==='es'?'Enviando la pregunta al motor de evidencia de TENS…':'Sending the question to the TENS evidence engine…'});
  const start=await window.TENS_API.fetch('/api/research',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:original})});
  if(start.status!==202)throw new Error('TENS_QUEUE_REJECTED_'+start.status);
@@ -159,6 +161,9 @@ const provider=Object.freeze({version:'4.2.0-live-proof-i18n',scopeLabel:'Live T
   const state=await res.json();
   if(state.state==='COMPLETE'){emit({eventType:'TENS_COMPLETE',message:lang==='es'?'TENS completó la revisión de evidencia.':'TENS completed the proof-bound evidence review.'});return transform(state,lang,original)}
   if(state.state==='FAILED')throw new Error('TENS_RESEARCH_HOLD_'+String(state.errorCode||'UNKNOWN'));
+  // Do not strand a visitor indefinitely on RUNNING or silently accept unknown protocol states.
+  if(state.state==='RUNNING'&&Date.now()-startedAt>=120000)throw new Error('TENS_RESEARCH_TIMEOUT');
+  if(!['QUEUED','RUNNING'].includes(state.state))throw new Error('TENS_STATUS_STATE_INVALID');
   if(state.state==='QUEUED'){
    const waited=Date.now()-startedAt;
    if(waited>=QUEUE_WAIT_LIMIT_MS)throw new Error('TENS_WORKER_UNAVAILABLE');
