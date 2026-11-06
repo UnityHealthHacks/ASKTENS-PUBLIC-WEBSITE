@@ -8,7 +8,7 @@
 //    status reads D1 first, then the legacy handler. All new jobs are written to D1 only.
 //  * PRR, share, telemetry, business and health routes are always delegated to worker.mjs untouched.
 import legacy from './worker.mjs';
-import {handleResearchRoute,status as d1Status,exists as d1Exists,jobIdOk} from './d1-research-queue.mjs';
+import {handleResearchRoute,status as d1Status,exists as d1Exists,jobIdOk,reserveInternalNonce} from './d1-research-queue.mjs';
 
 const UI_ORIGIN='https://asktens.com',FLAG='SCHEMA_VERIFIED_V1';
 // Public verification key copied from worker.mjs PUBLIC_KEY (public, not a secret). tests/worker-d1-candidate.test.cjs fails on drift.
@@ -74,12 +74,17 @@ export default{async fetch(request,env,ctx){
   const text=await bodyText(request.clone()).catch(()=>null);
   if(text===null)return json({error:'INVALID_BODY'},400);
   if(!(await verifySignature(request,text)))return json({error:'UNAUTHORIZED'},401);
+  // Reserve once in shared D1 BEFORE the legacy-first path can claim or mutate any job.
+  // The opaque proof is bound to this DB and nonce and may be consumed by the D1 handler only once.
+  const nonceProof=await reserveInternalNonce(env.DB,request.headers.get('x-tens-nonce'));
+  if(!nonceProof)return json({error:'UNAUTHORIZED'},401);
+  const reservedCtx={...hctx,nonceProof};
   if(p==='/internal/claim'){
    const lg=await legacyClaimFirst(request,env);if(lg)return lg;
-   return await handleResearchRoute(request.clone(),env,hctx);
+   return await handleResearchRoute(request.clone(),env,reservedCtx);
   }
   let b={};try{b=text?JSON.parse(text):{}}catch{return json({error:'INVALID_JSON'},400)}
-  if(jobIdOk(b?.jobId)&&await d1Status(env.DB,b.jobId))return await handleResearchRoute(request.clone(),env,hctx);
+  if(jobIdOk(b?.jobId)&&await d1Status(env.DB,b.jobId))return await handleResearchRoute(request.clone(),env,reservedCtx);
   return legacy.fetch(request,env,ctx); // legacy-queue job: legacy handler re-verifies signature and enforces its own claimToken
  }catch{return notReady(request)}
 }};
