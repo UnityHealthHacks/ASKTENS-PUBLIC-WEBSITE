@@ -265,3 +265,25 @@ test('completion binds exact job assignment and canonical checkpoint hash; never
  assert.equal(completed.state,'COMPLETE');
  assert.equal(completed.result.assignmentId,resultB.assignmentId);
 });
+test('preconsumed proof is unforgeable, bound to DB/nonce, and one-use',async()=>{
+ const db=d1(),dbOther=d1(),nonce='nonce_reserved_proof_001';
+ const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'content-type':'application/json'}});
+ const req=n=>new Request('https://api.asktens.com/internal/claim',{method:'POST',headers:{'x-tens-nonce':n},body:'{}'});
+ const proof=await Q.reserveInternalNonce(db,nonce);
+ assert.ok(proof);
+ assert.equal(await Q.reserveInternalNonce(db,nonce),null,'duplicate reservation refused');
+ const ctx={uiOrigin:'https://asktens.com',verifyInternal:async()=>true,bodyText:r=>r.text(),json,nonceProof:proof};
+ const ok=await Q.handleResearchRoute(req(nonce),{DB:db},ctx);assert.equal(ok.status,200);
+ const reused=await Q.handleResearchRoute(req(nonce),{DB:db},ctx);assert.equal(reused.status,401);
+ const fake=await Q.handleResearchRoute(req(nonce),{DB:db},{...ctx,nonceProof:{}});
+ assert.equal(fake.status,401,'fabricated reservation object refused');
+ const nonce2='nonce_reserved_proof_002',proof2=await Q.reserveInternalNonce(db,nonce2);
+ const wrongNonce=await Q.handleResearchRoute(req(nonce),{DB:db},{...ctx,nonceProof:proof2});
+ assert.equal(wrongNonce.status,401,'reserved proof bound to exact nonce');
+ assert.equal((await Q.handleResearchRoute(req(nonce2),{DB:db},{...ctx,nonceProof:proof2})).status,200,
+  'mismatched attempt does not exhaust authentic proof');
+ const nonce3='nonce_reserved_proof_003',proof3=await Q.reserveInternalNonce(db,nonce3);
+ assert.equal((await Q.handleResearchRoute(req(nonce3),{DB:dbOther},{...ctx,nonceProof:proof3})).status,401,
+  'proof cannot be used with another binding');
+ assert.equal((await Q.handleResearchRoute(req(nonce3),{DB:db},{...ctx,nonceProof:proof3})).status,200);
+});
