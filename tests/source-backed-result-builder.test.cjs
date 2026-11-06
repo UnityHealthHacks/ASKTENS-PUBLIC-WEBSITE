@@ -123,3 +123,14 @@ test('release attestation gate: no verifier, missing, mismatched, revoked or unv
  assert.ok(reasons(src(),{verifyReleaseAttestation:()=>'yes'}).includes('RELEASE_ATTESTATION_UNVERIFIED'),'only literal true');
  const ok=B.build(job,bundle(src()),FIXTURE_VERIFIER);assert.equal(ok.result.answer,'VERIFIED');assert.equal(ok.result.sources[0].publicSafe,true);
 });
+
+test('archived record without public link is UNKNOWN, not a VERIFIED citation',()=>{
+ const r=run([src({sourceKind:'ARCHIVED_PUBLIC_RECORD',url:undefined})]);
+ assert.equal(r.ok,true);assert.equal(r.result.answer,'UNKNOWN');assert.equal(r.result.sources.length,0);
+ assert.equal(r.dropped[0].reason,'SOURCE_URL_MISSING');
+});
+test('linked archived record keeps release attestation and its source citation',()=>{
+ const r=run([src({sourceKind:'ARCHIVED_PUBLIC_RECORD',url:'https://example.gov/archive.pdf'})]);
+ assert.equal(r.ok,true);assert.equal(r.result.answer,'VERIFIED');
+ assert.equal(r.result.sources[0].url,'https://example.gov/archive.pdf');
+});
