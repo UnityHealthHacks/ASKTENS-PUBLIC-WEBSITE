@@ -27,7 +27,7 @@ async function render(record,search='?id=south-jetty'){
   querySelector:()=>fakeElement(nodes),querySelectorAll:()=>[]};
  const window={TENS_API:{fetch:async(route,options={})=>{
   calls.push({route,method:options.method||'GET'});
-  if((options.method||'GET')==='POST')return{status:202,ok:true,json:async()=>({jobId:'OFFLINE_JOB'})};
+  if((options.method||'GET')==='POST')return{status:202,ok:true,json:async()=>({jobId:'R203WEB_000000000000000000000001'})};
   return {status:200,ok:true,json:async()=>({state:'COMPLETE',result:record})}
  }}};
  const location={search,href:'https://asktens.com/topic.html'+search};
