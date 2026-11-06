@@ -167,3 +167,37 @@ test('session-bound status: only the owning tab sees a D1 job; others get a unif
  const pre=await cand.default.fetch(new Request(API+'/api/research',{method:'OPTIONS',headers:{origin:UI,'access-control-request-method':'POST','access-control-request-headers':'x-tens-public-session'}}),env);
  assert.ok(pre.status<400&&/x-tens-public-session/i.test(pre.headers.get('access-control-allow-headers')||''));
 });
+test('shared nonce is single-use across two isolates during legacy-to-D1 rollover',async()=>{
+ const os=require('node:os');
+ const temp=fs.mkdtempSync(path.join(os.tmpdir(),'tens-d1-isolate-'));
+ try{
+  for(const file of ['worker.mjs','worker-d1-candidate.mjs','d1-research-queue.mjs']){
+   fs.copyFileSync(path.join(dir,file),path.join(temp,file));
+  }
+  const secondIsolate=(await import(pathToFileURL(path.join(temp,'worker-d1-candidate.mjs')).href)).default;
+  const store=kv(),DB=d1();
+  const oldEnv={TENS_PUBLIC_JOBS:store,DB},enabled={TENS_D1_QUEUE:FLAG,TENS_PUBLIC_JOBS:store,DB};
+  const oldId=(await (await post(oldEnv,'legacy source',sess(81))).json()).jobId;
+  const newId=(await (await post(enabled,'D1 source',sess(82))).json()).jobId;
+  const nonce='nonce_REPLAY_BOUNDARY_20261106';
+  const req=n=>new Request(API+'/internal/claim',{method:'POST',headers:{
+   'x-tens-timestamp':String(Date.now()),'x-tens-nonce':n,'x-tens-signature':VALID
+  },body:'{}'});
+  const originalRequest=req(nonce);
+  const first=await cand.default.fetch(originalRequest.clone(),enabled);
+  assert.equal(first.status,200);
+  assert.equal((await first.json()).jobId,oldId);
+  assert.equal(DB.raw.prepare('SELECT count(*) n FROM internal_nonces').get().n,1,
+   'legacy first claim must reserve shared nonce before any side effect');
+  const replay=await secondIsolate.fetch(originalRequest.clone(),enabled);
+  assert.equal(replay.status,401,'identical signed request must not be accepted on a second isolate');
+  assert.equal(DB.raw.prepare('SELECT count(*) n FROM internal_nonces').get().n,1,
+   'replay must not reserve a second nonce');
+  assert.equal(DB.raw.prepare('SELECT state FROM research_jobs WHERE id=?').get(newId).state,'QUEUED',
+   'D1 job must remain unclaimed after replay');
+  const fresh=await secondIsolate.fetch(req('nonce_FRESH_BOUNDARY_20261106'),enabled);
+  assert.equal(fresh.status,200);
+  assert.equal((await fresh.json()).jobId,newId,'new nonce still reaches D1 normally');
+  assert.equal(DB.raw.prepare('SELECT count(*) n FROM internal_nonces').get().n,2);
+ }finally{fs.rmSync(temp,{recursive:true,force:true})}
+});
