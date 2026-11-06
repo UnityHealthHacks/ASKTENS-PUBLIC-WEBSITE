@@ -21,7 +21,8 @@ const hash=x=>nodeCrypto.createHash('sha256').update(x).digest('hex');
 const stable=v=>Array.isArray(v)?'['+v.map(stable).join(',')+']':v&&typeof v==='object'?'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stable(v[k])).join(',')+'}':JSON.stringify(v);
 const bound=(jobId,r=good())=>{
  const {checkpointHash,...body}=r;
- const identity={...body,assignmentId:'ASSIGN_'+hash(jobId).slice(0,24)};
+ // Match the exact JSON wire/persistence shape before hashing: undefined keys are not stored.
+ const identity=JSON.parse(JSON.stringify({...body,assignmentId:'ASSIGN_'+hash(jobId).slice(0,24)}));
  return {...identity,checkpointHash:hash(stable(identity))};
 };
 test.before(async()=>{({DatabaseSync}=require('node:sqlite'));Q=await import(pathToFileURL(path.join(dir,'d1-research-queue.mjs')).href)});
