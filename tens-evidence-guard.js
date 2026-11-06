@@ -47,10 +47,11 @@
   const isTextArray = value => Array.isArray(value) && value.every(isText);
 
   function isSafePublicUrl(value) {
-    if (!isText(value)) return false;
+    if (!isText(value) || value !== value.trim() || /[\x00-\x1f\x7f]/.test(value)) return false;
     try {
-      const url = new URL(value, window.location.href);
-      return url.protocol === 'https:' || url.protocol === 'http:';
+      const url = new URL(value);
+      return url.protocol === 'https:' && !url.username && !url.password &&
+        !url.hash && !url.port && url.hostname.includes('.');
     } catch (error) {
       return false;
     }
