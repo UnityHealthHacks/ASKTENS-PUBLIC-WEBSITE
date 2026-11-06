@@ -25,8 +25,10 @@ function sourceProblem(s){
  if(s.publicAccess!==true||(s.publicSafe!==undefined&&s.publicSafe!==true))return 'SOURCE_NOT_ATTESTED_PUBLIC'; // publicSafe is never accepted from input as proof; see releaseProblem
  const archived=s.sourceKind==='ARCHIVED_PUBLIC_RECORD';
  if(!archived&&s.sourceKind!=='PUBLIC_WEB')return 'SOURCE_KIND_INVALID';
- if(!archived&&!publicHttps(s.url))return 'SOURCE_URL_UNSAFE';
- if(s.url&&!publicHttps(s.url))return 'SOURCE_URL_UNSAFE';
+ // Both web and archived records need an independently approved, clickable public citation.
+ // This syntax check is not a substitute for independent public-access verification.
+ if(!text(s.url))return 'SOURCE_URL_MISSING';
+ if(!publicHttps(s.url))return 'SOURCE_URL_UNSAFE';
  return '';
 }
 const numbersIn=t=>(String(t).match(/\d[\d,]*(?:\.\d+)?/g)||[]).map(n=>n.replace(/,/g,''));
