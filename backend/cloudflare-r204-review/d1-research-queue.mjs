@@ -135,6 +135,24 @@ export async function consumeNonce(db,nonce,now=Date.now(),{pruneExpired=true}={
  return changes(r)===1;
 }
 
+// An opaque, one-use proof prevents a legacy-first migration request from consuming
+// the same signed nonce a second time when it falls through to the D1 queue.
+// The shared database nonce row is reserved BEFORE any legacy or D1 side effect.
+const reservedNonceProofs=new WeakMap();
+export async function reserveInternalNonce(db,nonce,now=Date.now()){
+ if(!(await consumeNonce(db,nonce,now)))return null;
+ const proof=Object.freeze({});
+ reservedNonceProofs.set(proof,{db,nonce,used:false});
+ return proof;
+}
+function consumeReservedNonceProof(proof,db,nonce){
+ if(!proof||typeof proof!=='object')return false;
+ const reserved=reservedNonceProofs.get(proof);
+ if(!reserved||reserved.used||reserved.db!==db||reserved.nonce!==nonce)return false;
+ reserved.used=true;
+ return true;
+}
+
 /**
  * Route handler for the five contract routes. Returns a Response, or null when the path is not one of them.
  * ctx supplies worker.mjs primitives so no signing material lives here:
@@ -166,7 +184,12 @@ export async function handleResearchRoute(request,env,ctx){
  }
  let text;try{text=await ctx.bodyText(request)}catch{return json({error:'INVALID_BODY'},400)}
  if(!(await ctx.verifyInternal(request,text,env)))return json({error:'UNAUTHORIZED'},401);
- if(!(await consumeNonce(env.DB,request.headers.get('x-tens-nonce'))))return json({error:'UNAUTHORIZED'},401);
+ // In the legacy-first migration wrapper, shared nonce consumption already happened.
+ // A forged, reused or cross-binding proof is rejected; direct D1 calls use the normal database gate.
+ const nonce=request.headers.get('x-tens-nonce');
+ if(ctx.nonceProof!==undefined){
+  if(!consumeReservedNonceProof(ctx.nonceProof,env.DB,nonce))return json({error:'UNAUTHORIZED'},401);
+ }else if(!(await consumeNonce(env.DB,nonce)))return json({error:'UNAUTHORIZED'},401);
  let b={};if(text){try{b=JSON.parse(text)}catch{return json({error:'INVALID_JSON'},400)}}
  if(p==='/internal/claim')return json(await claim(env.DB));
  const r=p==='/internal/complete'?await complete(env.DB,b):await fail(env.DB,b);
