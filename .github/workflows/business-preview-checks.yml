@@ -41,6 +41,9 @@ jobs:
       - name: Test public research CORS preflight boundaries
         if: ${{ always() && !cancelled() }}
         run: node --test tests/research-cors-preflight.test.cjs
+      - name: Test public beta web surface acceptance gate (offline only)
+        if: ${{ always() && !cancelled() }}
+        run: node --test tests/public-beta-readiness.test.cjs
       - name: Test worker claim adapter contract and queued-timeout honesty
         if: ${{ always() && !cancelled() }}
         run: node --test tests/worker-adapter-contract.test.cjs
