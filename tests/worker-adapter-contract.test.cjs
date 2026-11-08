@@ -166,3 +166,25 @@ test('worker adapter rejects archive with no public link or a non-public source 
     'A non-public archive link cannot be a public citation: '+String(url));
  }
 });
+
+test('asynchronous source-backed reader is awaited before the exact claim can complete',async()=>{
+ const m=mk({buildResult:async()=>{await Promise.resolve();return goodResult()}});
+ const s=await processOne(m.d);
+ assert.equal(s.state,'COMPLETED');
+ assert.deepEqual(m.q.log,['claim']);
+ assert.equal([...m.q.rows.values()][0].state,'COMPLETE');
+});
+test('async source reader rejection fails closed without completing or publishing',async()=>{
+ const m=mk({buildResult:async()=>{await Promise.resolve();throw Error('READ_NOT_AUTHORIZED')}});
+ const s=await processOne(m.d);
+ assert.equal(s.state,'FAILED_REPORTED');
+ const row=[...m.q.rows.values()][0];
+ assert.equal(row.state,'FAILED');assert.equal(row.errorCode,'RESULT_BUILD_EXCEPTION');
+ assert.equal(row.result,undefined);
+});
+test('async source reader returning no evidence cannot complete an unverified finding',async()=>{
+ const m=mk({buildResult:async()=>{await Promise.resolve();return null}});
+ const s=await processOne(m.d);
+ assert.equal(s.state,'FAILED_REPORTED');
+ assert.equal([...m.q.rows.values()][0].errorCode,'NO_SOURCE_BACKED_RESULT');
+});

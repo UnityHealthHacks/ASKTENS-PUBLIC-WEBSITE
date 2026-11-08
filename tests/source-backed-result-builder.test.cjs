@@ -134,3 +134,13 @@ test('linked archived record keeps release attestation and its source citation',
  assert.equal(r.ok,true);assert.equal(r.result.answer,'VERIFIED');
  assert.equal(r.result.sources[0].url,'https://example.gov/archive.pdf');
 });
+
+test('async materialized-evidence reader requires injected release verifier and never trusts publicSafe alone',async()=>{
+ const fakeRows=async()=>{await Promise.resolve();return {sources:[src({publicSafe:true})],findings:[fnd()]}};
+ const missing=await B.asAsyncAdapterBuilder(fakeRows)(job,{state:'PUBLIC_RESEARCH_PASS'});
+ assert.equal(missing.answer,'UNKNOWN');assert.equal(missing.sources.length,0);
+ const verified=await B.asAsyncAdapterBuilder(fakeRows,FIXTURE_VERIFIER)(job,{state:'PUBLIC_RESEARCH_PASS'});
+ assert.equal(verified.answer,'VERIFIED');assert.equal(verified.sources.length,1);
+ const noRows=await B.asAsyncAdapterBuilder(async()=>null,FIXTURE_VERIFIER)(job,{});
+ assert.equal(noRows,null);
+});

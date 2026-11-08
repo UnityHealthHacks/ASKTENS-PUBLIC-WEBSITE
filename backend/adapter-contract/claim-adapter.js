@@ -55,7 +55,7 @@ function sourceBackedProblems(r){
  * @param {object} d
  * @param {{claim():Promise<object>,complete(o):Promise<object>,fail(o):Promise<object>}} d.queue
  * @param {{runJob(input):Promise<object>}} d.runner   guarded R212 research (returns PUBLIC_RESEARCH_PASS or PUBLIC_RESEARCH_HOLD)
- * @param {(job,proof)=>object|null} d.buildResult     turns a PASS proof into a TENS_R202 result; must return null if it cannot be source-backed
+ * @param {(job,proof)=>object|null|Promise<object|null>} d.buildResult   reads already-approved evidence then builds; must return null if not source-backed
  * @param {object} d.activationProof                   verbatim proof from R212; NEVER synthesized here
  * @param {object} d.namespace                         customer/tenant/case namespace required by the runner
  */
@@ -85,7 +85,9 @@ async function processOne(d){
  catch(e){return fail('R212_RUNNER_EXCEPTION')}
  if(!proof||proof.state==='PUBLIC_RESEARCH_HOLD')return fail('R212_HOLD_'+String(proof&&proof.reason||'UNKNOWN'));
  if(proof.state!=='PUBLIC_RESEARCH_PASS'||proof.completionClaimAllowed!==true)return fail('R212_NO_COMPLETION_CLAIM');
- let result;try{result=buildResult({jobId:c.jobId,question:c.question},proof)}catch(e){return fail('RESULT_BUILD_EXCEPTION')}
+ // The independent evidence store may require an asynchronous, read-only materialization read.
+ // Wait for that read before the guarded result check; rejected promises fail closed.
+ let result;try{result=await buildResult({jobId:c.jobId,question:c.question},proof)}catch(e){return fail('RESULT_BUILD_EXCEPTION')}
  if(!result)return fail('NO_SOURCE_BACKED_RESULT');
  const problems=sourceBackedProblems(result);
  if(problems.length)return fail('RESULT_REJECTED_'+problems[0]);

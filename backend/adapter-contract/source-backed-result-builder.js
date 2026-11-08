@@ -101,4 +101,14 @@ function selfCheck(r){
 function asAdapterBuilder(getBundle,opts){
  return (job,proof)=>{const b=typeof getBundle==='function'?getBundle(job,proof):null;if(!b)return null;const r=build(job,b,opts);return r.ok?r.result:null};
 }
-module.exports={build,asAdapterBuilder,sourceProblem,releaseProblem,findingProblem,selfCheck,PROTOCOL,normQ,sha};
+// Separate opt-in hook for independent, read-only asynchronous evidence materialization.
+// It does not create an issuer, release a private record, or bypass verifyReleaseAttestation.
+function asAsyncAdapterBuilder(readVerifiedBundle,opts){
+ return async (job,proof)=>{
+  const bundle=typeof readVerifiedBundle==='function'?await readVerifiedBundle(job,proof):null;
+  if(!bundle)return null;
+  const r=build(job,bundle,opts);
+  return r.ok?r.result:null;
+ };
+}
+module.exports={build,asAdapterBuilder,asAsyncAdapterBuilder,sourceProblem,releaseProblem,findingProblem,selfCheck,PROTOCOL,normQ,sha};
