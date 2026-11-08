@@ -5,6 +5,17 @@
 // Fail-closed: without a verified activation proof and a source-backed result builder it never claims or completes.
 const RESULT_PROTOCOL='TENS_R202_PUBLIC_RESULT_1'; // protocol the existing worker.mjs resultOk() accepts
 const MAX_RESULT_BYTES=500000;                      // same cap as worker.mjs /internal/complete
+const isIP=require('node:net').isIP;
+function safePublicSourceUrl(raw){
+ if(typeof raw!=='string'||!raw||raw.trim()!==raw||raw.length>2048)return false;
+ try{
+  const u=new URL(raw),h=u.hostname.toLowerCase().replace(/\.+$/,'');
+  return u.protocol==='https:'&&!u.username&&!u.password&&!u.hash&&h.includes('.')&&
+   !isIP(h)&&!h.startsWith('[')&&
+   !/\.(localhost|local|localdomain|internal|lan|home|corp|test|invalid|onion)$/.test(h)&&
+   h!=='localhost';
+ }catch{return false}
+}
 
 function resultOk(x){
  return !!x&&x.protocol===RESULT_PROTOCOL&&x.state==='COMPLETE'&&x.providerWrite===false&&x.productionMutation===false&&
@@ -21,7 +32,8 @@ function sourceBackedProblems(r){
   else{
    if(seen.has(s.evidenceId))errs.push('SOURCE_DUPLICATE');seen.add(s.evidenceId);
    if(s.sourceKind!=='ARCHIVED_PUBLIC_RECORD'&&s.sourceKind!=='PUBLIC_WEB')errs.push('SOURCE_KIND_INVALID');
-   if(!(s.sourceKind==='ARCHIVED_PUBLIC_RECORD'||/^https:\/\//.test(String(s.url||''))))errs.push('SOURCE_NOT_PUBLIC');
+   // Both public web and archived sources need safe, clickable public source URL syntax.
+   if(!safePublicSourceUrl(s.url))errs.push('SOURCE_NOT_PUBLIC');
    // Fail closed: public display needs an explicit publicSafe:true (set only after a verified release attestation). Absent is NOT compatible.
    if(s.publicSafe!==true||(s.publicAccess!==undefined&&s.publicAccess!==true))errs.push('SOURCE_NOT_PUBLIC');
    if(!/^[a-f0-9]{64}$/i.test(String(s.contentHash||'')))errs.push('SOURCE_HASH_MISSING');

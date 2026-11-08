@@ -152,3 +152,17 @@ test('missing required claim fields return CLAIM_MALFORMED without worker run',a
  assert.ok(sourceBackedProblems({...ok,sources:[src({sourceKind:'WEIRD'})]}).includes('SOURCE_KIND_INVALID'));
  assert.deepEqual(sourceBackedProblems({...ok,answer:'UNKNOWN',verified:[],sources:[],unknowns:[{statement:'u',reason:'NO_INDEX_MATCH'}]}),[],'valid evidence-free UNKNOWN');
 });
+
+test('worker adapter rejects archive with no public link or a non-public source URL',()=>{
+ const {sourceBackedProblems}=require('../backend/adapter-contract/claim-adapter.js');
+ const good=goodResult(),archived={...good.sources[0],sourceKind:'ARCHIVED_PUBLIC_RECORD'};
+ assert.deepEqual(sourceBackedProblems({...good,sources:[archived]}),[]);
+ for(const url of [undefined,'','http://example.gov/archive.pdf',
+  'https://localhost/archive.pdf','https://127.0.0.1/archive.pdf',
+  'https://name:password@example.gov/archive.pdf','https://example.gov/archive.pdf#secret',
+  'https://intranet.internal/archive.pdf']){
+  const source={...archived,url};
+  assert.ok(sourceBackedProblems({...good,sources:[source]}).includes('SOURCE_NOT_PUBLIC'),
+    'A non-public archive link cannot be a public citation: '+String(url));
+ }
+});
