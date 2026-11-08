@@ -38,6 +38,9 @@ jobs:
       - name: Test public Q&A provider-to-guard contract
         if: ${{ always() && !cancelled() }}
         run: node --test tests/public-qa-contract.test.cjs
+      - name: Test synthetic visitor question through D1 source builder and browser guard
+        if: ${{ always() && !cancelled() }}
+        run: node --test tests/public-qa-d1-integrated.test.cjs
       - name: Test public research CORS preflight boundaries
         if: ${{ always() && !cancelled() }}
         run: node --test tests/research-cors-preflight.test.cjs
