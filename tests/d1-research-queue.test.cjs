@@ -136,7 +136,8 @@ test('all cited sources require hash, unique identity, supported source type and
  const archived={...clean,sourceKind:'ARCHIVED_PUBLIC_RECORD',url:undefined};
  const base=()=>({...good(),verified:[{statement:'Direct source finding',evidenceRefs:['DOC_001']}],sources:[clean]});
  assert.equal(Q.sourceProblem(base()),'','valid HTTPS original');
- assert.equal(Q.sourceProblem({...base(),sources:[archived]}),'','valid hash-bound archived source without public URL');
+ assert.equal(Q.sourceProblem({...base(),sources:[archived]}),'SOURCE_URL_MISSING','unlinked archive cannot become a public citation');
+ assert.equal(Q.sourceProblem({...base(),sources:[{...archived,url:'https://example.gov/archive.pdf'}]}),'','linked, hash-bound archive');
  assert.equal(Q.sourceProblem(good()),'','UNKNOWN/no claims remains accepted');
  const bad=[
    [{...clean,contentHash:undefined},'SOURCE_HASH_MISSING'],
@@ -168,7 +169,8 @@ test('D1 completion rejects forged source envelopes atomically but accepts valid
    {name:'userinfo URL',sources:[{...goodSource,url:'https://example.gov@attacker.example/permit'}],accept:false},
    {name:'duplicate cited identity',sources:[goodSource,{...goodSource,contentHash:'d'.repeat(64)}],accept:false},
    {name:'valid public source',sources:[goodSource],accept:true},
-   {name:'valid archived source',sources:[{...goodSource,url:undefined,sourceKind:'ARCHIVED_PUBLIC_RECORD'}],accept:true}
+   {name:'unlinked archived source',sources:[{...goodSource,url:undefined,sourceKind:'ARCHIVED_PUBLIC_RECORD'}],accept:false},
+   {name:'valid linked archived source',sources:[{...goodSource,url:'https://example.gov/archive.pdf',sourceKind:'ARCHIVED_PUBLIC_RECORD'}],accept:true}
  ];
  for(let i=0;i<cases.length;i++){
   const item=cases[i],db=d1(),jobId=id(100+i),now=10000+i;
@@ -286,4 +288,13 @@ test('preconsumed proof is unforgeable, bound to DB/nonce, and one-use',async()=
  assert.equal((await Q.handleResearchRoute(req(nonce3),{DB:dbOther},{...ctx,nonceProof:proof3})).status,401,
   'proof cannot be used with another binding');
  assert.equal((await Q.handleResearchRoute(req(nonce3),{DB:db},{...ctx,nonceProof:proof3})).status,200);
+});
+
+test('archived source without a public citation URL fails the D1 completion gate',()=>{
+ const s={evidenceId:'DOC_001',preservationVerified:true,publicSafe:true,
+  sourceKind:'ARCHIVED_PUBLIC_RECORD',contentHash:'a'.repeat(64)};
+ const verified={...good(),verified:[{statement:'Archived finding',evidenceRefs:['DOC_001']}],sources:[s]};
+ assert.equal(Q.sourceProblem(verified),'SOURCE_URL_MISSING');
+ const linked={...s,url:'https://example.gov/archived-record.pdf'};
+ assert.equal(Q.sourceProblem({...verified,sources:[linked]}),'');
 });

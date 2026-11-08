@@ -29,6 +29,8 @@ export function sourceProblem(r){
   if(x.publicSafe!==true||(x.publicAccess!==undefined&&x.publicAccess!==true))return 'SOURCE_NOT_PUBLIC';
   if(typeof x.contentHash!=='string'||!HEX64.test(x.contentHash))return 'SOURCE_HASH_MISSING';
   if(x.sourceKind!=='PUBLIC_WEB'&&x.sourceKind!=='ARCHIVED_PUBLIC_RECORD')return 'SOURCE_KIND_INVALID';
+  // An archive hash alone is not a clickable, publicly released citation.
+  if(x.sourceKind==='ARCHIVED_PUBLIC_RECORD'&&(typeof x.url!=='string'||!x.url.trim()))return 'SOURCE_URL_MISSING';
   if(x.sourceKind==='PUBLIC_WEB'&&!safeHttpsSourceUrl(x.url))return 'SOURCE_NOT_PUBLIC';
   if(x.url!==undefined&&x.url!==null&&!safeHttpsSourceUrl(x.url))return 'SOURCE_URL_UNSAFE';
   ids.add(x.evidenceId);

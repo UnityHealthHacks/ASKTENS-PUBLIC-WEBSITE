@@ -97,3 +97,18 @@ test('results page evidence anchors do not send the question URL as referrer',()
  assert(anchors.length>=3,'all evidence/share anchors must refuse referrer data');
  assert(!html.includes('target="_blank" rel="noopener"'),'no legacy referrer-leaking evidence anchor');
 });
+
+test('public archived record keeps its independently approved clickable source URL',async()=>{
+ const x=completeState();
+ x.result.sources[0].sourceKind='ARCHIVED_PUBLIC_RECORD';
+ const {result}=await ask(x);
+ assert.equal(result.tensState,'VALIDATED');
+ assert.equal(result.sources[0].url,SRC_URL);
+ assert.equal(result.verified[0].sourceIds[0],result.sources[0].id);
+});
+test('an archive lacking a public document URL cannot be presented as verified',async()=>{
+ const x=completeState();
+ x.result.sources[0].sourceKind='ARCHIVED_PUBLIC_RECORD';
+ delete x.result.sources[0].url;
+ await assert.rejects(ask(x),/PUBLIC_ARCHIVE_NOT_LINKABLE/);
+});
