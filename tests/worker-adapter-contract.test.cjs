@@ -8,6 +8,7 @@ const root=path.resolve(__dirname,'..');
 const {processOne}=require('../backend/adapter-contract/claim-adapter.js');
 const HASH='a'.repeat(64);
 const proofOk={state:'R212_PUBLIC_RESEARCH_ACTIVATION_PROOF_READY'}; // fixture only; real proof must come from R212
+const verifyFixtureActivation=async ({activationProof})=>activationProof===proofOk; // never use in production
 function fakeQueue(jobs){
  const log=[];const rows=new Map(jobs.map(j=>[j.id,{...j,state:'QUEUED'}]));
  return {log,rows,
@@ -18,7 +19,7 @@ function fakeQueue(jobs){
 const passProof={state:'PUBLIC_RESEARCH_PASS',completionClaimAllowed:true};
 const goodResult=()=>({protocol:'TENS_R202_PUBLIC_RESULT_1',state:'COMPLETE',providerWrite:false,productionMutation:false,assignmentId:'ASSIGN_1',checkpointHash:'c',
  verified:[{statement:'s',evidenceRefs:['E1']}],unknowns:[],sources:[{evidenceId:'E1',preservationVerified:true,publicSafe:true,sourceKind:'PUBLIC_WEB',url:'https://example.gov/r.pdf',contentHash:HASH}]});
-const mk=(over={})=>{const q=fakeQueue([{id:'R203WEB_'+'x'.repeat(24),question:'q'}]);return {q,d:{queue:q,runner:{runJob:async()=>passProof},buildResult:()=>goodResult(),activationProof:proofOk,namespace:{},...over}}};
+const mk=(over={})=>{const q=fakeQueue([{id:'R203WEB_'+'x'.repeat(24),question:'q'}]);return {q,d:{queue:q,runner:{runJob:async()=>passProof},buildResult:()=>goodResult(),activationProof:proofOk,verifyActivationProof:verifyFixtureActivation,namespace:{},...over}}};
 
 test('unbound adapter never claims a job (job stays QUEUED)',async()=>{
  const {q,d}=mk({runner:undefined});const r=await processOne(d);
@@ -27,7 +28,7 @@ test('unbound adapter never claims a job (job stays QUEUED)',async()=>{
 test('missing or forged-looking activation proof never claims',async()=>{
  for(const p of [undefined,{},{state:'NOPE'}]){const {q,d}=mk({activationProof:p});assert.equal((await processOne(d)).reason,'ACTIVATION_PROOF_REQUIRED');assert.deepEqual(q.log,[])}
 });
-test('empty queue is idle',async()=>{const q=fakeQueue([]);assert.equal((await processOne({queue:q,runner:{},buildResult(){},activationProof:proofOk})).state,'IDLE')});
+test('empty queue is idle',async()=>{const q=fakeQueue([]);assert.equal((await processOne({queue:q,runner:{},buildResult(){},activationProof:proofOk,verifyActivationProof:verifyFixtureActivation})).state,'IDLE')});
 test('source-backed PASS completes with claim token',async()=>{
  const {q,d}=mk();const r=await processOne(d);assert.equal(r.state,'COMPLETED');assert.equal([...q.rows.values()][0].state,'COMPLETE');
 });
@@ -187,4 +188,48 @@ test('async source reader returning no evidence cannot complete an unverified fi
  const s=await processOne(m.d);
  assert.equal(s.state,'FAILED_REPORTED');
  assert.equal([...m.q.rows.values()][0].errorCode,'NO_SOURCE_BACKED_RESULT');
+});
+
+test('READY string alone cannot claim a job without an independent activation verifier',async()=>{
+ const {q,d}=mk();
+ const response=await processOne({...d,verifyActivationProof:undefined});
+ assert.equal(response.state,'UNBOUND_HOLD');
+ assert.equal(response.reason,'ACTIVATION_VERIFIER_REQUIRED');
+ assert.deepEqual(q.log,[]);
+ assert.equal([...q.rows.values()][0].state,'QUEUED');
+});
+test('counterfeit READY object rejected by independent activation verifier before claim',async()=>{
+ const {q,d}=mk({activationProof:{state:'R212_PUBLIC_RESEARCH_ACTIVATION_PROOF_READY'}});
+ const r=await processOne({...d,verifyActivationProof:async ({activationProof})=>activationProof===proofOk});
+ assert.equal(r.state,'UNBOUND_HOLD');
+ assert.equal(r.reason,'ACTIVATION_PROOF_UNVERIFIED');
+ assert.deepEqual(q.log,[]);
+});
+
+test('activation verifier reject, throw, or nonboolean output never claims a job',async()=>{
+ for(const mode of ['false','string','throw']){
+  const {q,d}=mk({verifyActivationProof:async()=>{await Promise.resolve();if(mode==='throw')throw Error('issuer-unavailable');return mode==='string'?'true':false}});
+  const r=await processOne(d);
+  assert.equal(r.state,'UNBOUND_HOLD',mode);
+  assert.equal(r.reason,'ACTIVATION_PROOF_UNVERIFIED',mode);
+  assert.deepEqual(q.log,[],mode);
+ }
+});
+test('changing the authority proof during async verification prevents a claim',async()=>{
+ const proof={state:'R212_PUBLIC_RESEARCH_ACTIVATION_PROOF_READY',scope:'PUBLIC_TEST'};
+ const {q,d}=mk({activationProof:proof,verifyActivationProof:async({activationProof})=>{
+   await Promise.resolve();activationProof.scope='ALTERED';return true;
+ }});
+ const r=await processOne(d);
+ assert.equal(r.reason,'ACTIVATION_PROOF_UNVERIFIED');
+ assert.deepEqual(q.log,[]);
+});
+test('changing bound namespace during async verification prevents a claim',async()=>{
+ const scope={caseId:'CASE_TEST'};
+ const {q,d}=mk({namespace:scope,verifyActivationProof:async({namespace})=>{
+   await Promise.resolve();namespace.caseId='OTHER_CASE';return true;
+ }});
+ const r=await processOne(d);
+ assert.equal(r.reason,'ACTIVATION_PROOF_UNVERIFIED');
+ assert.deepEqual(q.log,[]);
 });

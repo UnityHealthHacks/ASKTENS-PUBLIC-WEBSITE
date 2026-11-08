@@ -6,6 +6,7 @@ const enc=new TextEncoder();
 const signed=[];
 const JID='R203WEB_'+'a'.repeat(32);
 const proof={state:'R212_PUBLIC_RESEARCH_ACTIVATION_PROOF_READY'};
+const verifyFixtureActivation=async({activationProof})=>activationProof===proof; // offline fixture only
 const sourceResult={protocol:'TENS_R202_PUBLIC_RESULT_1',state:'COMPLETE',providerWrite:false,productionMutation:false,
  assignmentId:'AG160_SYNTH',checkpointHash:'sha',
  verified:[],unknowns:[{statement:'No independently verified answer in offline fixture',reason:'NO_INDEX_MATCH'}],sources:[]};
@@ -73,7 +74,7 @@ const now=()=>Date.now();
  test('signed mock client integrates unchanged claim-adapter, reports COMPLETED only on 200',async()=>{
   const s=server(),q=client(s);
   const r=await processOne({queue:q,runner:{runJob:async()=>({state:'PUBLIC_RESEARCH_PASS',completionClaimAllowed:true})},
-   buildResult:()=>sourceResult,activationProof:proof,namespace:{}});
+   buildResult:()=>sourceResult,activationProof:proof,verifyActivationProof:verifyFixtureActivation,namespace:{}});
   assert.equal(r.state,'COMPLETED');assert.equal(s.state(),'COMPLETE');assert.equal(s.log.length,2);
  });
  test('signed mock client refuses false completion in claim adapter',async()=>{
@@ -82,7 +83,7 @@ const now=()=>Date.now();
    calls++;return response(409,{error:'JOB_STATE_CONFLICT'});
   }}),q=client(s);
   const r=await processOne({queue:q,runner:{runJob:async()=>({state:'PUBLIC_RESEARCH_PASS',completionClaimAllowed:true})},
-   buildResult:()=>sourceResult,activationProof:proof,namespace:{}});
+   buildResult:()=>sourceResult,activationProof:proof,verifyActivationProof:verifyFixtureActivation,namespace:{}});
   assert.equal(r.state,'COMPLETION_UNCONFIRMED');assert.equal(calls,1);
  });
  test('body tampering after signing invalidates signature',async()=>{

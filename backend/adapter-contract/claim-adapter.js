@@ -57,12 +57,21 @@ function sourceBackedProblems(r){
  * @param {{runJob(input):Promise<object>}} d.runner   guarded R212 research (returns PUBLIC_RESEARCH_PASS or PUBLIC_RESEARCH_HOLD)
  * @param {(job,proof)=>object|null|Promise<object|null>} d.buildResult   reads already-approved evidence then builds; must return null if not source-backed
  * @param {object} d.activationProof                   verbatim proof from R212; NEVER synthesized here
+ * @param {(args:{activationProof:object,namespace:object})=>boolean|Promise<boolean>} d.verifyActivationProof   separately bound, independently accepted authority verifier; required before any claim
  * @param {object} d.namespace                         customer/tenant/case namespace required by the runner
  */
 async function processOne(d){
- const {queue,runner,buildResult,activationProof,namespace}=d||{};
+ const {queue,runner,buildResult,activationProof,namespace,verifyActivationProof}=d||{};
  if(!queue||!runner||typeof buildResult!=='function')return {state:'UNBOUND_HOLD',reason:'ADAPTER_NOT_BOUND',claimed:false};
  if(!activationProof||activationProof.state!=='R212_PUBLIC_RESEARCH_ACTIVATION_PROOF_READY')return {state:'UNBOUND_HOLD',reason:'ACTIVATION_PROOF_REQUIRED',claimed:false};
+ // The READY label is caller-controlled. A separate bound verifier must independently
+ // authenticate the complete proof and approved namespace before even claiming a job.
+ // This callback must be supplied by the protected authority; this module cannot issue it.
+ if(typeof verifyActivationProof!=='function')return {state:'UNBOUND_HOLD',reason:'ACTIVATION_VERIFIER_REQUIRED',claimed:false};
+ let original,namespaceSnapshot;try{original=JSON.stringify(activationProof);namespaceSnapshot=JSON.stringify(namespace)}catch{return {state:'UNBOUND_HOLD',reason:'ACTIVATION_PROOF_UNVERIFIED',claimed:false}}
+ let accepted=false;try{accepted=await verifyActivationProof({activationProof,namespace})===true}catch{}
+ let unchanged=false;try{unchanged=original===JSON.stringify(activationProof)&&namespaceSnapshot===JSON.stringify(namespace)}catch{}
+ if(!accepted||!unchanged)return {state:'UNBOUND_HOLD',reason:'ACTIVATION_PROOF_UNVERIFIED',claimed:false};
  let c;
  try{c=await queue.claim()}
  catch{return {state:'CLAIM_UNCONFIRMED',reason:'QUEUE_CLAIM_TRANSPORT_UNCERTAIN',claimed:false}}

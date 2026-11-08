@@ -9,6 +9,8 @@ const Q='What does the record establish about Midnight Pass?',HASH='b'.repeat(64
 const job={jobId:'R203WEB_'+'x'.repeat(24),question:Q};
 // SYNTHETIC fixture verifier only: accepts a locally forged record. It stands in for a governed issuer that does not exist yet.
 const FIXTURE_VERIFIER={verifyReleaseAttestation:x=>x.attestation&&x.attestation.fixtureOnly===true};
+const FIXTURE_ACTIVATION_PROOF={state:'R212_PUBLIC_RESEARCH_ACTIVATION_PROOF_READY'};
+const FIXTURE_ACTIVATION_VERIFIER=async({activationProof})=>activationProof===FIXTURE_ACTIVATION_PROOF; // fake issuer for offline tests only
 const withAtt=s=>({...s,releaseAttestation:{evidenceId:s.evidenceId,contentHash:s.contentHash,scope:'PUBLIC_WEB',fixtureOnly:true}});
 const src=(o={})=>withAtt({evidenceId:'EV_1',label:'County permit',recordType:'Permit',readStatus:'READ_COMPLETE',contentHash:HASH,preservation:{verified:true,independent:true,verifier:'fixture-verifier',contentHashMatchesPreservedBytes:true},publicAccess:true,sourceKind:'PUBLIC_WEB',url:'https://example.gov/permit.pdf',...o});
 const fnd=(o={})=>({id:'F1',type:'PERMIT',statement:'Permit 4521 was issued for $12,500.',directQuote:'Permit No. 4521 issued; fee 12,500 dollars. $12,500',evidenceRefs:['EV_1'],verification:{state:'COMPLETE_VERIFIED',basis:'DIRECT_SOURCE_STATEMENT',groundingRatio:1,numbersGrounded:true},relevance:{state:'RELEVANT',questionSha256:B.sha(B.normQ(Q))},...o});
@@ -71,7 +73,7 @@ test('UNKNOWN result also passes the real browser guard',async()=>{
 });
 test('adapter hook: no bundle -> no result (job fails closed); good bundle completes via claim adapter',async()=>{
  const calls=[];const queue={claim:async()=>({state:'CLAIMED',jobId:job.jobId,question:Q,claimToken:'T'}),complete:async o=>{calls.push(['complete',o]);return {status:200,state:'COMPLETE_ACCEPTED'}},fail:async o=>{calls.push(['fail',o]);return {status:200,state:'FAILURE_ACCEPTED'}}};
- const base={queue,runner:{runJob:async()=>({state:'PUBLIC_RESEARCH_PASS',completionClaimAllowed:true})},activationProof:{state:'R212_PUBLIC_RESEARCH_ACTIVATION_PROOF_READY'},namespace:{}};
+ const base={queue,runner:{runJob:async()=>({state:'PUBLIC_RESEARCH_PASS',completionClaimAllowed:true})},activationProof:FIXTURE_ACTIVATION_PROOF,verifyActivationProof:FIXTURE_ACTIVATION_VERIFIER,namespace:{}};
  assert.equal((await processOne({...base,buildResult:B.asAdapterBuilder(()=>null)})).state,'FAILED_REPORTED');assert.equal(calls[0][1].errorCode,'NO_SOURCE_BACKED_RESULT');
  assert.equal((await processOne({...base,buildResult:B.asAdapterBuilder(()=>({sources:[src()],findings:[fnd()]}),FIXTURE_VERIFIER)})).state,'COMPLETED');assert.equal(calls[1][0],'complete');
 });
@@ -192,7 +194,7 @@ test('async read-builder with async verifier works with existing guarded claim a
   verifyReleaseAttestation:async x=>{await Promise.resolve();return x.attestation.fixtureOnly===true}
  });
  const s=await processOne({queue:q,runner:{runJob:async()=>({state:'PUBLIC_RESEARCH_PASS',completionClaimAllowed:true})},
-  buildResult:callback,activationProof:{state:'R212_PUBLIC_RESEARCH_ACTIVATION_PROOF_READY'},namespace:{}});
+  buildResult:callback,activationProof:FIXTURE_ACTIVATION_PROOF,verifyActivationProof:FIXTURE_ACTIVATION_VERIFIER,namespace:{}});
  assert.equal(s.state,'COMPLETED');
 });
 
