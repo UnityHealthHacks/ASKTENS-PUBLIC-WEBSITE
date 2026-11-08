@@ -97,6 +97,32 @@ function selfCheck(r){
  if(r.answer==='UNKNOWN'&&(r.verified.length||r.sources.length))return 'UNKNOWN_WITH_CLAIMS';
  return '';
 }
+// Async path accepts a real issuer's Promise<boolean> while retaining the synchronous
+// source/quote/citation checks. No supplied boolean flag grants release authority.
+// Only the exact evidenceId/contentHash/scope/attestation tuple approved by the
+// injected issuer can be admitted. Changes while verification is pending fail closed.
+async function buildAsync(job,bundle,opts){
+ const verify=opts&&typeof opts.verifyReleaseAttestation==='function'?opts.verifyReleaseAttestation:null;
+ if(!verify||!job||!text(job.jobId)||!text(job.question)||!bundle||!Array.isArray(bundle.sources)||!Array.isArray(bundle.findings))return build(job,bundle);
+ const approvals=[];
+ for(const s of bundle.sources){
+  if(sourceProblem(s))continue;
+  const a=s.releaseAttestation;
+  if(!a||typeof a!=='object'||a.evidenceId!==s.evidenceId||
+   String(a.contentHash||'').toLowerCase()!==String(s.contentHash).toLowerCase()||
+   !text(a.scope)||a.revoked===true)continue;
+  const claim={evidenceId:s.evidenceId,contentHash:String(s.contentHash).toLowerCase(),scope:a.scope,attestation:a};
+  try{
+   // Capture identity before invoking a potentially asynchronous external verifier.
+   const claimId=sha(claim),sourceFingerprint=sha(s);
+   if(await verify(claim)===true&&sha(s)===sourceFingerprint)
+    approvals.push({source:s,claimId,sourceFingerprint});
+  }catch{ /* broken or unavailable issuer never authorizes an evidence release */ }
+ }
+ // Recheck earlier approvals because another verifier may have awaited while records changed.
+ const approved=new Set(approvals.filter(x=>{try{return sha(x.source)===x.sourceFingerprint}catch{return false}}).map(x=>x.claimId));
+ return build(job,bundle,{verifyReleaseAttestation:claim=>approved.has(sha(claim))});
+}
 /** Adapter hook for claim-adapter.processOne: getBundle(job,proof) must return already-verified evidence or null. */
 function asAdapterBuilder(getBundle,opts){
  return (job,proof)=>{const b=typeof getBundle==='function'?getBundle(job,proof):null;if(!b)return null;const r=build(job,b,opts);return r.ok?r.result:null};
@@ -107,8 +133,8 @@ function asAsyncAdapterBuilder(readVerifiedBundle,opts){
  return async (job,proof)=>{
   const bundle=typeof readVerifiedBundle==='function'?await readVerifiedBundle(job,proof):null;
   if(!bundle)return null;
-  const r=build(job,bundle,opts);
+  const r=await buildAsync(job,bundle,opts);
   return r.ok?r.result:null;
  };
 }
-module.exports={build,asAdapterBuilder,asAsyncAdapterBuilder,sourceProblem,releaseProblem,findingProblem,selfCheck,PROTOCOL,normQ,sha};
+module.exports={build,buildAsync,asAdapterBuilder,asAsyncAdapterBuilder,sourceProblem,releaseProblem,findingProblem,selfCheck,PROTOCOL,normQ,sha};

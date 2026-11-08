@@ -144,3 +144,74 @@ test('async materialized-evidence reader requires injected release verifier and 
  const noRows=await B.asAsyncAdapterBuilder(async()=>null,FIXTURE_VERIFIER)(job,{});
  assert.equal(noRows,null);
 });
+
+test('async public-release verifier is awaited and permits only its exact approved attestation',async()=>{
+ let calls=0;
+ const verifier={verifyReleaseAttestation:async x=>{calls++;await Promise.resolve();return x.attestation.fixtureOnly===true}};
+ const result=await B.buildAsync(job,{sources:[src()],findings:[fnd()]},verifier);
+ assert.equal(calls,1);assert.equal(result.ok,true);
+ assert.equal(result.result.answer,'VERIFIED');assert.deepEqual(result.result.verified[0].evidenceRefs,['EV_1']);
+});
+test('promise that rejects, returns a nonboolean, or returns false never releases a source',async()=>{
+ for(const mode of ['reject','string','false']){
+  const verifier={verifyReleaseAttestation:async()=>{await Promise.resolve();if(mode==='reject')throw Error('issuer-unavailable');return mode==='string'?'true':false}};
+  const x=await B.buildAsync(job,{sources:[src()],findings:[fnd()]},verifier);
+  assert.equal(x.ok,true,mode);assert.equal(x.result.answer,'UNKNOWN',mode);
+  assert.equal(x.result.sources.length,0,mode);
+  assert.ok(x.dropped.some(y=>y.reason==='RELEASE_ATTESTATION_UNVERIFIED'),mode);
+ }
+});
+test('async verifier is not called for a mismatched, revoked, or unpreserved source',async()=>{
+ const cases=[
+  src({readStatus:'PARTIAL'}),
+  {...src(),releaseAttestation:{...src().releaseAttestation,contentHash:'c'.repeat(64)}},
+  {...src(),releaseAttestation:{...src().releaseAttestation,revoked:true}},
+  src({preservation:{verified:false,independent:true,verifier:'v',contentHashMatchesPreservedBytes:true}})
+ ];
+ for(const source of cases){
+  let calls=0;
+  const x=await B.buildAsync(job,{sources:[source],findings:[fnd()]},{verifyReleaseAttestation:async()=>{calls++;return true}});
+  assert.equal(calls,0);assert.equal(x.result.answer,'UNKNOWN');assert.equal(x.result.sources.length,0);
+ }
+});
+test('mutation of the release attestation while async verifier is pending invalidates the decision',async()=>{
+ const source=src(),bundle={sources:[source],findings:[fnd()]};
+ const verifier={verifyReleaseAttestation:async()=>{
+  await Promise.resolve();
+  source.releaseAttestation.scope='PRIVATE_ONLY';
+  return true;
+ }};
+ const r=await B.buildAsync(job,bundle,verifier);
+ assert.equal(r.result.answer,'UNKNOWN');
+ assert.equal(r.result.sources.length,0);
+});
+test('async read-builder with async verifier works with existing guarded claim adapter',async()=>{
+ const q={claim:async()=>({state:'CLAIMED',jobId:job.jobId,question:job.question,claimToken:'synthetic'}),
+   complete:async o=>({status:200,state:'COMPLETE_ACCEPTED'}),fail:async o=>({status:200,state:'FAILURE_ACCEPTED'})};
+ const callback=B.asAsyncAdapterBuilder(async()=>({sources:[src()],findings:[fnd()]}),{
+  verifyReleaseAttestation:async x=>{await Promise.resolve();return x.attestation.fixtureOnly===true}
+ });
+ const s=await processOne({queue:q,runner:{runJob:async()=>({state:'PUBLIC_RESEARCH_PASS',completionClaimAllowed:true})},
+  buildResult:callback,activationProof:{state:'R212_PUBLIC_RESEARCH_ACTIVATION_PROOF_READY'},namespace:{}});
+ assert.equal(s.state,'COMPLETED');
+});
+
+test('asynchronous approval cannot promote a source whose citation URL changes while pending',async()=>{
+ const source=src(),before=source.url;
+ const r=await B.buildAsync(job,{sources:[source],findings:[fnd()]},{
+  verifyReleaseAttestation:async()=>{await Promise.resolve();source.url='https://other.example.gov/redirect.pdf';return true}
+ });
+ assert.notEqual(source.url,before);
+ assert.equal(r.result.answer,'UNKNOWN');
+ assert.equal(r.result.sources.length,0);
+});
+test('async verifier admits only approved sources, not another source with a separate identifier',async()=>{
+ const src2=src({evidenceId:'EV_2',url:'https://other.example.gov/permit.pdf'});
+ const f2=fnd({id:'F2',evidenceRefs:['EV_2']});
+ const r=await B.buildAsync(job,{sources:[src(),src2],findings:[fnd(),f2]},{
+  verifyReleaseAttestation:async x=>{await Promise.resolve();return x.evidenceId==='EV_1'}
+ });
+ assert.deepEqual(r.result.sources.map(x=>x.evidenceId),['EV_1']);
+ assert.deepEqual(r.result.verified.map(x=>x.evidenceRefs),[['EV_1']]);
+ assert.ok(r.dropped.some(x=>x.id==='EV_2'&&x.reason==='RELEASE_ATTESTATION_UNVERIFIED'));
+});
