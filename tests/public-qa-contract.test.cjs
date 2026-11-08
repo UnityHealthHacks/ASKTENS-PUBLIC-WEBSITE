@@ -66,7 +66,7 @@ test('verified finding citing a missing source is blocked',async()=>{
  assert.equal(result.tensState,'REJECTED');assert.equal(result.verified.length,0);
 });
 test('unpreserved source is not presented as verified',async()=>{
- const {result}=await ask(completeState({sources:[{evidenceId:'E1',preservationVerified:false,publicSafe:true,url:SRC_URL,contentHash:'a'.repeat(64)}]}));
+ const {result}=await ask(completeState({sources:[{evidenceId:'E1',preservationVerified:false,publicSafe:true,url:SRC_URL,contentHash:'a'.repeat(64),sourceKind:'PUBLIC_WEB'}]}));
  assert.equal(result.tensState,'REJECTED');assert.equal(result.verified.length,0);
 });
 test('a missing or nonliteral public release flag is rejected at the browser provider boundary',async()=>{
@@ -111,4 +111,42 @@ test('an archive lacking a public document URL cannot be presented as verified',
  x.result.sources[0].sourceKind='ARCHIVED_PUBLIC_RECORD';
  delete x.result.sources[0].url;
  await assert.rejects(ask(x),/PUBLIC_ARCHIVE_NOT_LINKABLE/);
+});
+
+test('uncited backend summary cannot replace the source-grounded plain-language answer',async()=>{
+ const marker='Unsupported secret approval for $9,000,000';
+ const {result}=await ask(completeState({answer:marker}));
+ assert.equal(result.tensState,'VALIDATED');
+ assert.match(result.plainAnswer,/permit record is on file/i);
+ assert.doesNotMatch(result.plainAnswer,/secret approval|9,000,000/i);
+ assert.ok(result.verified[0].sourceIds.length===1);
+});
+test('contradictory UNKNOWN result with a verified finding fails closed',async()=>{
+ await assert.rejects(ask(completeState({answer:'UNKNOWN'})),/PUBLIC_ANSWER_CONFLICT/);
+});
+test('a free-form claimed answer with no cited findings fails closed',async()=>{
+ await assert.rejects(ask(completeState({answer:'This claim is unsupported',verified:[],sources:[],
+   unknowns:[{type:'UNRESOLVED',statement:'No source established this claim.',reason:'NOT_ESTABLISHED'}]})),/PUBLIC_ANSWER_UNCITED/);
+});
+test('partially missing citations are rejected, not silently removed',async()=>{
+ const altered=completeState();
+ altered.result.verified[0].evidenceRefs=['E1','MISSING_OTHER_RECORD'];
+ const {result}=await ask(altered);
+ assert.equal(result.tensState,'REJECTED');
+ assert.equal(result.verified.length,0);
+});
+
+test('private or unrecognized source kind cannot be relabeled public web evidence',async()=>{
+ const src={...completeState().result.sources[0],sourceKind:'PRIVATE_DRIVE'};
+ await assert.rejects(ask(completeState({sources:[src]})),/PUBLIC_SOURCE_KIND_INVALID/);
+});
+test('explicitly unreleased public-access flag cannot become a public result',async()=>{
+ const src={...completeState().result.sources[0],publicAccess:false};
+ await assert.rejects(ask(completeState({sources:[src]})),/PUBLIC_SOURCE_NOT_RELEASED/);
+});
+test('source with absent or malformed SHA-256 cannot support a verified answer',async()=>{
+ for(const h of [undefined,'not-a-hash',null]){
+  const src={...completeState().result.sources[0],contentHash:h};
+  await assert.rejects(ask(completeState({sources:[src]})),/PUBLIC_SOURCE_HASH_MISSING/);
+ }
 });
