@@ -37,7 +37,7 @@ function releaseProblem(s,verify){
  const a=s.releaseAttestation;
  if(!a||typeof a!=='object')return 'RELEASE_ATTESTATION_MISSING';
  if(a.evidenceId!==s.evidenceId||String(a.contentHash||'').toLowerCase()!==String(s.contentHash).toLowerCase()||!text(a.scope)||a.revoked===true)return 'RELEASE_ATTESTATION_MISMATCH';
- let ok=false;try{ok=verify({evidenceId:s.evidenceId,contentHash:String(s.contentHash).toLowerCase(),scope:a.scope,attestation:a})===true}catch{ok=false}
+ let ok=false;try{ok=verify({evidenceId:s.evidenceId,contentHash:String(s.contentHash).toLowerCase(),scope:a.scope,attestation:a},s)===true}catch{ok=false}
  return ok?'':'RELEASE_ATTESTATION_UNVERIFIED';
 }
 /** Why a finding is not admissible, or ''. `sources` is a Map of admitted evidenceId -> source. */
@@ -120,8 +120,19 @@ async function buildAsync(job,bundle,opts){
   }catch{ /* broken or unavailable issuer never authorizes an evidence release */ }
  }
  // Recheck earlier approvals because another verifier may have awaited while records changed.
- const approved=new Set(approvals.filter(x=>{try{return sha(x.source)===x.sourceFingerprint}catch{return false}}).map(x=>x.claimId));
- return build(job,bundle,{verifyReleaseAttestation:claim=>approved.has(sha(claim))});
+ // Bind approval to the exact source object AND its complete verified fingerprint.
+ // A different object with an identical claim cannot inherit the approval; any
+ // in-place change (including citation URL) also invalidates the approval.
+ const approved=new WeakMap();
+ for(const x of approvals){
+  try{if(sha(x.source)===x.sourceFingerprint)approved.set(x.source,{claimId:x.claimId,sourceFingerprint:x.sourceFingerprint})}catch{}
+ }
+ return build(job,bundle,{verifyReleaseAttestation:(claim,source)=>{
+  try{
+   const entry=approved.get(source);
+   return !!entry&&entry.claimId===sha(claim)&&entry.sourceFingerprint===sha(source);
+  }catch{return false}
+ }});
 }
 /** Adapter hook for claim-adapter.processOne: getBundle(job,proof) must return already-verified evidence or null. */
 function asAdapterBuilder(getBundle,opts){
