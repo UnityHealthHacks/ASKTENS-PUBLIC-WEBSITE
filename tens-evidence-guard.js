@@ -107,7 +107,7 @@
       if (!isText(source.recordType)) errors.push(`Source ${id} is missing recordType.`);
       if (source.provenanceStatus !== 'verified') errors.push(`Source ${id} has unresolved provenance.`);
       if (source.publicSafe !== true) errors.push(`Source ${id} is not explicitly public-safe.`);
-      if (Object.prototype.hasOwnProperty.call(source, 'url') && source.url !== '' && !isSafePublicUrl(source.url)) {
+      if (!isSafePublicUrl(source.url)) {
         errors.push(`Source ${id} has an unsafe or invalid public URL.`);
       }
 
