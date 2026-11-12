@@ -21,16 +21,19 @@
       if (!isObject(source) || typeof source.evidenceId !== 'string' ||
           !stableId.test(source.evidenceId) || indexed.has(source.evidenceId) ||
           source.preservationVerified !== true) return fail('SOURCE_IDENTITY_UNPROVEN');
-      const archive = source.sourceKind === 'ARCHIVED_PUBLIC_RECORD';
       const hasHash = typeof source.contentHash === 'string' && sha256.test(source.contentHash);
       let hasSafeUrl = false;
       if (typeof source.url === 'string' && source.url) {
         try { const u = new URL(source.url); hasSafeUrl = u.protocol === 'https:' &&
-              !u.username && !u.password; } catch {}
+              !u.username && !u.password && !!u.hostname; } catch {}
         if (!hasSafeUrl) return fail('UNSAFE_SOURCE_LINK');
       }
-      if (archive ? !hasHash : !hasSafeUrl || !hasHash) return fail('SOURCE_PROVENANCE_INCOMPLETE');
-      if (source.publicSafe === false) return fail('NOT_PUBLIC_SAFE');
+      // Every admitted citation must have an independently accessible HTTPS link,
+      // including archived records. A hash alone is not a public citation.
+      if (!hasSafeUrl || !hasHash) return fail('SOURCE_PROVENANCE_INCOMPLETE');
+      // Missing approval is not approval. The independent release issuer must
+      // still attest public disclosure; this client check cannot replace it.
+      if (source.publicSafe !== true) return fail('NOT_PUBLIC_SAFE');
       indexed.set(source.evidenceId, source);
     }
     for (const finding of result.verified) {
