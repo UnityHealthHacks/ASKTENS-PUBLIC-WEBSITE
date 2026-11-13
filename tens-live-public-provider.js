@@ -116,9 +116,10 @@ function spanishUnknownText(u,query){
  }
  return 'Este punto sigue sin resolverse con la evidencia actualmente admitida.';
 }
+const sensitiveQuery = u => [...u.searchParams.keys()].some(k=>/^(?:token|access[-_]?token|auth(?:orization)?|api[-_]?key|x[-_]api[-_]?key|key|secret|session(?:id)?|jwt|sig(?:nature)?|code|awsaccesskeyid|googleaccessid|x[-_](?:amz|goog)[-_](?:signature|credential|security[-_]token))$/i.test(k));
 function isPublicCitationUrl(value){
  if(typeof value!=='string'||value!==value.trim()||/[\x00-\x1f\x7f]/.test(value))return false;
- try{const u=new URL(value);return u.protocol==='https:'&&!u.username&&!u.password&&!u.hash&&!u.port&&u.hostname.includes('.');}catch{return false}
+ try{const u=new URL(value);return u.protocol==='https:'&&!u.username&&!u.password&&!u.hash&&!u.port&&u.hostname.includes('.')&&!sensitiveQuery(u);}catch{return false}
 }
 function transform(x,language='en',query=''){
  const lang=String(language||'en').toLowerCase()==='es'?'es':'en';
