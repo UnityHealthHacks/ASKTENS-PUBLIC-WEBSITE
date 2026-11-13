@@ -46,11 +46,13 @@
   const isStableId = value => isText(value) && value.length >= 3 && STABLE_ID.test(value);
   const isTextArray = value => Array.isArray(value) && value.every(isText);
 
+  const sensitiveQuery = u => [...u.searchParams.keys()].some(k=>/^(?:token|access[-_]?token|auth(?:orization)?|api[-_]?key|x[-_]api[-_]?key|key|secret|session(?:id)?|jwt|sig(?:nature)?|code|awsaccesskeyid|googleaccessid|x[-_](?:amz|goog)[-_](?:signature|credential|security[-_]token))$/i.test(k));
   function isSafePublicUrl(value) {
-    if (!isText(value)) return false;
+    if (!isText(value) || value !== value.trim() || /[\x00-\x1f\x7f]/.test(value)) return false;
     try {
-      const url = new URL(value, window.location.href);
-      return url.protocol === 'https:' || url.protocol === 'http:';
+      const url = new URL(value);
+      return url.protocol === 'https:' && !url.username && !url.password &&
+        !url.hash && !url.port && url.hostname.includes('.') && !sensitiveQuery(url);
     } catch (error) {
       return false;
     }
@@ -106,7 +108,8 @@
       if (!isText(source.recordType)) errors.push(`Source ${id} is missing recordType.`);
       if (source.provenanceStatus !== 'verified') errors.push(`Source ${id} has unresolved provenance.`);
       if (source.publicSafe !== true) errors.push(`Source ${id} is not explicitly public-safe.`);
-      if (Object.prototype.hasOwnProperty.call(source, 'url') && source.url !== '' && !isSafePublicUrl(source.url)) {
+      if (source.preservationVerified !== true) errors.push(`Source ${id} is not explicitly preservation-verified.`);
+      if (!isSafePublicUrl(source.url)) {
         errors.push(`Source ${id} has an unsafe or invalid public URL.`);
       }
 
