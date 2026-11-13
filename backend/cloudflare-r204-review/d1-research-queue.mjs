@@ -11,7 +11,8 @@ function safeHttpsSourceUrl(raw){
  if(typeof raw!=='string')return false;
  try{
   const u=new URL(raw),h=u.hostname.toLowerCase().replace(/\.+$/,'');
-  return u.protocol==='https:'&&!u.username&&!u.password&&!u.hash&&
+  const sensitive=[...u.searchParams.keys()].some(k=>/^(?:token|access[-_]?token|auth(?:orization)?|api[-_]?key|x[-_]api[-_]?key|key|secret|session(?:id)?|jwt|sig(?:nature)?|code|awsaccesskeyid|googleaccessid|x[-_](?:amz|goog)[-_](?:signature|credential|security[-_]token))$/i.test(k));
+  return u.protocol==='https:'&&!u.username&&!u.password&&!u.hash&&!u.port&&!sensitive&&
    h.includes('.')&&h!=='localhost'&&!/\.(localhost|local|internal|lan|home|corp|test|invalid)$/.test(h)&&
    !/^(\d+\.){3}\d+$/.test(h)&&!h.startsWith('[');
  }catch{return false}
