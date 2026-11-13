@@ -298,3 +298,27 @@ test('archived source without a public citation URL fails the D1 completion gate
  const linked={...s,url:'https://example.gov/archived-record.pdf'};
  assert.equal(Q.sourceProblem({...verified,sources:[linked]}),'');
 });
+
+test('D1 source gate rejects token-like and signed URLs for web and archived public citations',()=>{
+ const goodUrl='https://www.scgov.net/public-records?page=2';
+ const unsafe=[
+  'https://www.scgov.net/public-records?token=FAKE',
+  'https://www.scgov.net/public-records?X-Amz-Signature=FAKE',
+  'https://www.scgov.net/public-records?X-Goog-Credential=FAKE',
+  'https://www.scgov.net/public-records?access%5Ftoken=FAKE',
+  'https://www.scgov.net/public-records?code=FAKE',
+  'https://www.scgov.net:8443/public-records',
+  'https://www.scgov.net/public-records#FAKE',
+  'https://user:pass@www.scgov.net/public-records'
+ ];
+ const evaluate=(url,kind)=>Q.sourceProblem({
+  answer:'VERIFIED',verified:[{evidenceRefs:['SYNTHETIC_EVIDENCE_01']}],
+  sources:[{evidenceId:'SYNTHETIC_EVIDENCE_01',sourceKind:kind,
+    preservationVerified:true,publicSafe:true,
+    contentHash:'a'.repeat(64),url}]
+ });
+ for(const kind of ['PUBLIC_WEB','ARCHIVED_PUBLIC_RECORD']){
+  assert.equal(evaluate(goodUrl,kind),'',kind+' safe public link');
+  for(const url of unsafe)assert.notEqual(evaluate(url,kind),'',kind+' unsafe public link '+url);
+ }
+});
