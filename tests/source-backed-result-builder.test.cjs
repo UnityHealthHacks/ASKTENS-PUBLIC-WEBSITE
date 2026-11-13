@@ -217,3 +217,24 @@ test('async verifier admits only approved sources, not another source with a sep
  assert.deepEqual(r.result.verified.map(x=>x.evidenceRefs),[['EV_1']]);
  assert.ok(r.dropped.some(x=>x.id==='EV_2'&&x.reason==='RELEASE_ATTESTATION_UNVERIFIED'));
 });
+
+test('public citation URL screening rejects synthetic credential-like links but preserves normal public query',()=>{
+ const examples=[
+  ['public', 'https://example.gov/permit.pdf', ''],
+  ['ordinary page query','https://example.gov/permit.pdf?page=2',''],
+  ['session token','https://example.gov/permit.pdf?token=FAKE','SOURCE_URL_UNSAFE'],
+  ['signed AWS link','https://example.gov/permit.pdf?X-Amz-Signature=FAKE','SOURCE_URL_UNSAFE'],
+  ['signed Google link','https://example.gov/permit.pdf?X-Goog-Credential=FAKE','SOURCE_URL_UNSAFE'],
+  ['encoded access token','https://example.gov/permit.pdf?access%5Ftoken=FAKE','SOURCE_URL_UNSAFE'],
+  ['authorization code','https://example.gov/permit.pdf?code=FAKE','SOURCE_URL_UNSAFE'],
+  ['fragment','https://example.gov/permit.pdf#fake','SOURCE_URL_UNSAFE'],
+  ['credentials','https://user:pass@example.gov/permit.pdf','SOURCE_URL_UNSAFE'],
+  ['nonstandard port','https://example.gov:8443/permit.pdf','SOURCE_URL_UNSAFE']
+ ];
+ for(const [label,url,expected] of examples)assert.equal(B.sourceProblem(src({url})),expected,label);
+ const unsafe=run([src({url:'https://example.gov/permit.pdf?token=FAKE'})]);
+ assert.equal(unsafe.ok,true);
+ assert.equal(unsafe.result.answer,'UNKNOWN');
+ assert.equal(unsafe.result.sources.length,0);
+ assert.ok(unsafe.dropped.some(x=>x.reason==='SOURCE_URL_UNSAFE'));
+});
