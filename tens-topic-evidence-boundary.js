@@ -4,6 +4,7 @@
   const sha256 = /^[a-f0-9]{64}$/i;
   const stableId = /^[A-Za-z0-9][A-Za-z0-9._:-]{2,}$/;
   const isObject = x => !!x && typeof x === 'object' && !Array.isArray(x);
+  const sensitiveQuery = u => [...u.searchParams.keys()].some(k=>/^(?:token|access[-_]?token|auth(?:orization)?|api[-_]?key|x[-_]api[-_]?key|key|secret|session(?:id)?|jwt|sig(?:nature)?|code|awsaccesskeyid|googleaccessid|x[-_](?:amz|goog)[-_](?:signature|credential|security[-_]token))$/i.test(k));
   function validate(result) {
     const fail = reason => ({valid:false, reason});
     if (!isObject(result) || !Array.isArray(result.sources) ||
@@ -25,7 +26,7 @@
       let hasSafeUrl = false;
       if (typeof source.url === 'string' && source.url) {
         try { const u = new URL(source.url); hasSafeUrl = u.protocol === 'https:' &&
-              !u.username && !u.password && !!u.hostname; } catch {}
+              !u.username && !u.password && !u.hash && !u.port && u.hostname.includes('.') && !sensitiveQuery(u); } catch {}
         if (!hasSafeUrl) return fail('UNSAFE_SOURCE_LINK');
       }
       // Every admitted citation must have an independently accessible HTTPS link,
