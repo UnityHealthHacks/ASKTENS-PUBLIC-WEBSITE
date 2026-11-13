@@ -46,12 +46,13 @@
   const isStableId = value => isText(value) && value.length >= 3 && STABLE_ID.test(value);
   const isTextArray = value => Array.isArray(value) && value.every(isText);
 
+  const sensitiveQuery = u => [...u.searchParams.keys()].some(k=>/^(?:token|access[-_]?token|auth(?:orization)?|api[-_]?key|x[-_]api[-_]?key|key|secret|session(?:id)?|jwt|sig(?:nature)?|code|awsaccesskeyid|googleaccessid|x[-_](?:amz|goog)[-_](?:signature|credential|security[-_]token))$/i.test(k));
   function isSafePublicUrl(value) {
     if (!isText(value) || value !== value.trim() || /[\x00-\x1f\x7f]/.test(value)) return false;
     try {
       const url = new URL(value);
       return url.protocol === 'https:' && !url.username && !url.password &&
-        !url.hash && !url.port && url.hostname.includes('.');
+        !url.hash && !url.port && url.hostname.includes('.') && !sensitiveQuery(url);
     } catch (error) {
       return false;
     }
